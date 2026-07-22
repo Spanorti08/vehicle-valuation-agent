@@ -1,0 +1,14 @@
+{
+  "asset_id": "CAR-001",
+  "plate_number": "豫A·TEST1",
+  "vehicle_name": "别克牌SGM7240EYAA小轿车",
+  "manufacturer": "上海通用汽车有限公司",
+  "unit": "辆",
+  "quantity": 1,
+  "purchase_date": "2015-03",
+  "in_service_date": "2015-03",
+  "mileage_km": 150000,
+  "book_value_original_cny": 240000,
+  "book_value_net_cny": 12000,
+  "valuation_date": "2026-06-30"
+}
