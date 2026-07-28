@@ -1,0 +1,12 @@
+{
+  "plate_number": "豫A·TEST1",
+  "owner_name": "郑州示例科技有限公司",
+  "vehicle_type": "小型轿车",
+  "vehicle_model": "SGM7240EYAA",
+  "vin": "LSGTEST1234567890",
+  "engine_number": "ENG-TEST-001",
+  "registration_date": "2015-03-18",
+  "issue_date": "2015-03-18",
+  "address": "郑州市示例地址",
+  "use_character": "非营运"
+}

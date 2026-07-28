@@ -1,0 +1,59 @@
+[
+  {
+    "case_id": "CASE-A",
+    "source_name": "瓜子二手车",
+    "source_url": "https://www.guazi.com/car-detail/c166395462305578.html",
+    "contact": "瓜子二手车官方客服",
+
+    "vehicle_model": "别克 君越 2.4L 手自一体变速器(AT) 2014款精英舒适型",
+    "registration_date": "2014-02",
+    "mileage_km": 168400,
+
+    "exterior_condition": "车门能正常打开，车身有正常使用痕迹，无明显碰撞情况，车厢无剐蹭痕迹，未见挤压变形。",
+    "interior_condition": "无明显破损，驾驶舱内电子元器件均能正常使用，座椅完整齐全，一般磨损，内饰状况一般。",
+    "hardware_condition": "车辆能够正常启动，发动机舱外观无异常，各硬件工况正常，状况较好。",
+
+    "price_cny": 21000,
+    "price_type": "成交价",
+    "tax_included": true,
+    "notes": "经询价，成交价21000元。"
+  },
+  {
+  "case_id": "CASE-B",
+  "source_name": "瓜子二手车",
+  "source_url": "https://www.guazi.com/car-detail/c163882025302620.html",
+  "contact": "瓜子二手车客服",
+
+  "vehicle_model": "别克 君越 2.4L 手自一体变速器(AT) 2013款精英舒适型",
+  "registration_date": "2014-05",
+  "mileage_km": 110600,
+
+  "exterior_condition": "车门能正常打开，车身有正常使用痕迹，无明显碰撞情况，车厢无剐蹭痕迹，未见挤压变形。",
+  "interior_condition": "无明显破损，驾驶舱内电子元器件均能正常使用，座椅完整齐全，一般磨损，内饰状况一般。",
+  "hardware_condition": "车辆能够正常启动，发动机舱外观无异常，各硬件工况正常，状况较好。",
+
+  "price_cny": 25300,
+  "price_type": "成交价",
+  "tax_included": true,
+  "notes": "该车辆已成交，价格为25300元。"
+},
+{
+  "case_id": "CASE-C",
+  "source_name": "瓜子二手车",
+  "source_url": "https://www.guazi.com/car-detail/c166606396326933.html",
+  "contact": "瓜子二手车客服",
+
+  "vehicle_model": "别克 君越 2.4L 手自一体变速器(AT) 2013款精英舒适型",
+  "registration_date": "2014-07",
+  "mileage_km": 148400,
+
+  "exterior_condition": "车门能正常打开，车身有正常使用痕迹，无明显碰撞情况，车厢无剐蹭痕迹，未见挤压变形。",
+  "interior_condition": "无明显破损，驾驶舱内电子元器件均能正常使用，座椅完整齐全，一般磨损，内饰状况一般。",
+  "hardware_condition": "车辆能够正常启动，发动机舱外观无异常，各硬件工况正常，状况较好。",
+
+  "price_cny": 22000,
+  "price_type": "成交价",
+  "tax_included": true,
+  "notes": "经询价，该车辆最低22000元成交。"
+}
+]

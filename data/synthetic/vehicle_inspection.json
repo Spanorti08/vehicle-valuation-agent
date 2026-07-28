@@ -1,0 +1,10 @@
+{
+  "inspection_date": "2026-06-28",
+  "actual_mileage_km": 150000,
+  "exterior_grade": "一般",
+  "interior_grade": "一般",
+  "hardware_grade": "较好",
+  "can_start": true,
+  "can_drive": true,
+  "notes": "车辆可以正常启动和行驶，存在正常使用痕迹。"
+}
