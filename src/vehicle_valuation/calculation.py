@@ -22,12 +22,16 @@ def calculate_adjusted_price(
 
     comparison_indices = (
         indices.transaction_index,
-        indices.transaction_date_index,
+        indices.inspection_index,
+        indices.annual_mileage_index,
+        indices.registration_date_index,
+        indices.transfer_index,
+        indices.vehicle_use_index,
         indices.exterior_index,
         indices.interior_index,
-        indices.hardware_index,
-        indices.annual_mileage_index,
-        indices.used_years_index,
+        indices.engine_transmission_index,
+        indices.chassis_index,
+        indices.electrical_index,
     )
 
     for comparison_index in comparison_indices:
@@ -58,6 +62,48 @@ def calculate_final_value(
             indices,
         )
         adjusted_prices.append(adjusted_price)
+
+    average_price = (
+        sum(adjusted_prices, Decimal("0"))
+        / Decimal(len(adjusted_prices))
+    )
+
+    return (
+        average_price // Decimal("100")
+    ) * Decimal("100")
+
+
+def calculate_price_from_index_values(
+    price_cny: Decimal,
+    index_values: list[int],
+) -> Decimal:
+    """根据一组条件指数计算案例修正后价格。"""
+
+    adjusted_price = price_cny
+
+    for index_value in index_values:
+        if index_value <= 0:
+            raise ValueError(
+                "条件指数必须大于0"
+            )
+
+        adjusted_price *= (
+            BASE_INDEX
+            / Decimal(index_value)
+        )
+
+    return adjusted_price
+
+
+def calculate_rounded_average_value(
+    adjusted_prices: list[Decimal],
+) -> Decimal:
+    """计算平均修正价格并向下取整到百元。"""
+
+    if not adjusted_prices:
+        raise ValueError(
+            "至少需要一个修正后价格"
+        )
 
     average_price = (
         sum(adjusted_prices, Decimal("0"))

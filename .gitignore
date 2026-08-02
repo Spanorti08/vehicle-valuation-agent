@@ -30,3 +30,7 @@ tmp/
 data/private/
 references/private/
 
+# 本地RAG原始资料
+data/rag/raw/
+data/rag/processed/
+

@@ -1,0 +1,36 @@
+{
+  "rule_set_id": "RULE-DEMO-001",
+  "rule_name": "车辆市场法示例调整规则",
+  "source": "测试.xlsx中的因素修正说明",
+  "case_specific": true,
+  "condition_grades": [
+    "差",
+    "较差",
+    "一般",
+    "较好",
+    "好"
+  ],
+  "condition_rules": {
+    "exterior": {
+      "points_per_grade": 3
+    },
+    "interior": {
+      "points_per_grade": 2
+    },
+    "hardware": {
+      "points_per_grade": 3
+    }
+  },
+  "annual_mileage_rule": {
+    "upper_bounds_km": [
+      10000,
+      13000,
+      16000
+    ],
+    "points_per_grade": 5
+  },
+  "registration_rule": {
+    "years_per_grade": 1,
+    "points_per_grade": 5
+  }
+}

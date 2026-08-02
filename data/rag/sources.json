@@ -1,0 +1,82 @@
+[
+  {
+    "document_id": "DOC-001",
+    "title": "资产评估基本准则",
+    "filename": "资产评估基本准则.docx",
+    "document_type": "基本准则",
+    "source_organization": "中国资产评估协会",
+    "source_url": "https://www.cas.org.cn/fgzd/pgzc/index.htm"
+  },
+  {
+    "document_id": "DOC-002",
+    "title": "资产评估执业准则——资产评估方法",
+    "filename": "资产评估执业准则——资产评估方法.pdf",
+    "document_type": "评估方法",
+    "source_organization": "中国资产评估协会",
+    "source_url": "https://www.cas.org.cn/fgzd/pgzc/index.htm"
+  },
+  {
+    "document_id": "DOC-003",
+    "title": "资产评估执业准则——机器设备",
+    "filename": "资产评估执业准则——机器设备.pdf",
+    "document_type": "资产类别准则",
+    "source_organization": "中国资产评估协会",
+    "source_url": "https://www.cas.org.cn/fgzd/pgzc/index.htm"
+  },
+  {
+    "document_id": "DOC-004",
+    "title": "资产评估执业准则——资产评估报告",
+    "filename": "资产评估执业准则——资产评估报告.pdf",
+    "document_type": "报告准则",
+    "source_organization": "中国资产评估协会",
+    "source_url": "https://www.cas.org.cn/fgzd/pgzc/index.htm"
+  },
+  {
+    "document_id": "DOC-005",
+    "title": "资产评估执业准则——资产评估程序",
+    "filename": "资产评估执业准则——资产评估程序.pdf",
+    "document_type": "程序准则",
+    "source_organization": "中国资产评估协会",
+    "source_url": "https://www.cas.org.cn/fgzd/pgzc/index.htm"
+  },
+  {
+    "document_id": "DOC-006",
+    "title": "资产评估价值类型指导意见",
+    "filename": "资产评估价值类型指导意见.pdf",
+    "document_type": "指导意见",
+    "source_organization": "中国资产评估协会",
+    "source_url": "https://www.cas.org.cn/fgzd/pgzc/index.htm"
+  },
+  {
+    "document_id": "DOC-007",
+    "title": "资产评估对象法律权属指导意见",
+    "filename": "资产评估对象法律权属指导意见.pdf",
+    "document_type": "指导意见",
+    "source_organization": "中国资产评估协会",
+    "source_url": "https://www.cas.org.cn/fgzd/pgzc/index.htm"
+  },
+  {
+    "document_id": "DOC-008",
+    "title": "资产评估执业准则——资产评估委托合同",
+    "filename": "资产评估执业准则——资产评估委托合同.pdf",
+    "document_type": "合同准则",
+    "source_organization": "中国资产评估协会",
+    "source_url": "https://www.cas.org.cn/fgzd/pgzc/index.htm"
+  },
+  {
+    "document_id": "DOC-009",
+    "title": "资产评估执业准则——资产评估档案",
+    "filename": "资产评估执业准则——资产评估档案.pdf",
+    "document_type": "档案准则",
+    "source_organization": "中国资产评估协会",
+    "source_url": "https://www.cas.org.cn/fgzd/pgzc/index.htm"
+  },
+  {
+    "document_id": "DOC-010",
+    "title": "资产评估机构业务质量控制指南",
+    "filename": "资产评估机构业务质量控制指南.pdf",
+    "document_type": "质量控制",
+    "source_organization": "中国资产评估协会",
+    "source_url": "https://www.cas.org.cn/fgzd/pgzc/index.htm"
+  }
+]
