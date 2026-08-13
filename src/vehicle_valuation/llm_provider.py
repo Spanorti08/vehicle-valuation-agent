@@ -47,7 +47,7 @@ class OllamaProvider:
                     "temperature": 0,
                 },
             },
-            timeout=180,
+            timeout=600,
         )
 
         response.raise_for_status()

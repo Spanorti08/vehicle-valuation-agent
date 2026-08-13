@@ -1,4 +1,5 @@
 import re
+from datetime import datetime
 from decimal import Decimal
 from urllib.parse import urljoin
 
@@ -48,6 +49,91 @@ def fetch_market_page(
     return html
 
 
+def _open_market_listing_page(
+    page,
+    url: str,
+) -> None:
+    """打开市场案例详情页，并检查是否触发访问验证。"""
+
+    page.goto(
+        url,
+        wait_until="domcontentloaded",
+        timeout=30_000,
+    )
+    page.wait_for_timeout(3_000)
+
+    body_text = page.locator("body").inner_text()
+    verification_words = [
+        "尝试太多了",
+        "网络错误",
+        "Security Verification",
+        "验证连接安全性",
+    ]
+
+    if any(
+        word in body_text
+        for word in verification_words
+    ):
+        raise ValueError(
+            "网页触发访问验证，无法截图"
+        )
+
+
+def _capture_screenshots_from_loaded_page(
+    page,
+) -> tuple[bytes, bytes]:
+    """在已加载的详情页上截取车辆顶部和车况详情。"""
+
+    page.evaluate("window.scrollTo(0, 0)")
+    page.wait_for_timeout(1_000)
+    vehicle_screenshot = page.screenshot(
+        type="png",
+        full_page=False,
+    )
+
+    detail_anchor = page.get_by_text(
+        "档案手续",
+        exact=True,
+    )
+
+    if detail_anchor.count() > 0:
+        detail_anchor.first.evaluate(
+            """
+            element => {
+                const top =
+                    element.getBoundingClientRect().top
+                    + window.scrollY
+                    - 220;
+
+                window.scrollTo({
+                    top: Math.max(0, top),
+                    behavior: "instant"
+                });
+            }
+            """
+        )
+    else:
+        page.evaluate("window.scrollTo(0, 800)")
+
+    page.wait_for_timeout(1_000)
+    detail_screenshot = page.screenshot(
+        type="png",
+        full_page=False,
+    )
+
+    return vehicle_screenshot, detail_screenshot
+
+
+def _capture_screenshots_with_page(
+    page,
+    url: str,
+) -> tuple[bytes, bytes]:
+    """使用一个已打开的浏览器页面截取某个市场案例。"""
+
+    _open_market_listing_page(page, url)
+    return _capture_screenshots_from_loaded_page(page)
+
+
 def capture_market_listing_screenshots(
     url: str,
 ) -> tuple[bytes, bytes]:
@@ -58,96 +144,215 @@ def capture_market_listing_screenshots(
             channel="chrome",
             headless=True,
         )
-
-        page = browser.new_page(
+        context = browser.new_context(
             locale="zh-CN",
             viewport={
                 "width": 1600,
                 "height": 900,
             },
         )
+        page = context.new_page()
 
         try:
-            page.goto(
+            return _capture_screenshots_with_page(
+                page,
                 url,
-                wait_until="domcontentloaded",
-                timeout=30_000,
             )
-            page.wait_for_timeout(3_000)
-
-            body_text = page.locator(
-                "body"
-            ).inner_text()
-
-            verification_words = [
-                "尝试太多了",
-                "网络错误",
-                "Security Verification",
-                "验证连接安全性",
-            ]
-
-            if any(
-                word in body_text
-                for word in verification_words
-            ):
-                raise ValueError(
-                    "网页触发访问验证，无法截图"
-                )
-
-            page.evaluate(
-                "window.scrollTo(0, 0)"
-            )
-            page.wait_for_timeout(1_000)
-
-            vehicle_screenshot = (
-                page.screenshot(
-                    type="png",
-                    full_page=False,
-                )
-            )
-
-            detail_anchor = page.get_by_text(
-                "档案手续",
-                exact=True,
-            )
-
-            if detail_anchor.count() > 0:
-                detail_anchor.first.evaluate(
-                    """
-                    element => {
-                        const top =
-                            element.getBoundingClientRect().top
-                            + window.scrollY
-                            - 220;
-
-                        window.scrollTo({
-                            top: Math.max(0, top),
-                            behavior: "instant"
-                        });
-                    }
-                    """
-                )
-            else:
-                page.evaluate(
-                    "window.scrollTo(0, 800)"
-                )
-
-            page.wait_for_timeout(1_000)
-
-            detail_screenshot = (
-                page.screenshot(
-                    type="png",
-                    full_page=False,
-                )
-            )
-
         finally:
+            context.close()
             browser.close()
 
-    return (
-        vehicle_screenshot,
-        detail_screenshot,
+
+def capture_market_listing_screenshots_batch(
+    urls: list[str],
+) -> tuple[
+    dict[str, tuple[bytes, bytes]],
+    dict[str, str],
+]:
+    """在同一个浏览器会话中依次截取多个市场案例。"""
+
+    screenshots = {}
+    failures = {}
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(
+            channel="chrome",
+            headless=True,
+        )
+        context = browser.new_context(
+            locale="zh-CN",
+            viewport={
+                "width": 1600,
+                "height": 900,
+            },
+        )
+        page = context.new_page()
+
+        try:
+            for index, url in enumerate(urls):
+                try:
+                    screenshots[url] = (
+                        _capture_screenshots_with_page(
+                            page,
+                            url,
+                        )
+                    )
+                except Exception as error:
+                    failures[url] = str(error)
+
+                if index < len(urls) - 1:
+                    page.wait_for_timeout(2_000)
+        finally:
+            context.close()
+            browser.close()
+
+    return screenshots, failures
+
+
+def extract_visible_listing_price(
+    page,
+    listing: MarketListing,
+) -> Decimal:
+    """从页面顶部主车源卡片读取当前挂牌价格。"""
+
+    price_text = page.evaluate(
+        """
+        model => {
+            const nodes = [...document.querySelectorAll('body *')]
+                .filter(element => {
+                    const text = element.textContent?.trim();
+                    const rect = element.getBoundingClientRect();
+                    return text === model
+                        && rect.width > 0
+                        && rect.height > 0;
+                })
+                .sort((left, right) =>
+                    left.getBoundingClientRect().top
+                    - right.getBoundingClientRect().top
+                );
+
+            for (const node of nodes) {
+                let container = node;
+
+                for (let level = 0; level < 6; level += 1) {
+                    const text = container.innerText || '';
+                    const match = text.match(
+                        /(?:^|\\s)(\\d+(?:\\.\\d+)?)\\s*万(?:\\s|$)/
+                    );
+
+                    if (match) {
+                        return match[1];
+                    }
+
+                    container = container.parentElement;
+
+                    if (!container) {
+                        break;
+                    }
+                }
+            }
+
+            return null;
+        }
+        """,
+        listing.vehicle_model,
     )
+
+    if price_text is None:
+        raise ValueError(
+            "详情页顶部未找到当前挂牌价格"
+        )
+
+    return Decimal(price_text) * Decimal("10000")
+
+
+def build_market_listing_snapshot(
+    listing: MarketListing,
+    price_cny: Decimal,
+    captured_at: datetime,
+) -> MarketListing:
+    """保留候选案例资料，只更新同次截图读取到的价格。"""
+
+    return listing.model_copy(
+        update={
+            "price_cny": price_cny,
+            "captured_at": captured_at,
+        }
+    )
+
+
+def capture_market_listing_snapshots_batch(
+    listings: list[MarketListing],
+) -> tuple[
+    list[MarketListing],
+    list[MarketListingDetail],
+    dict[str, tuple[bytes, bytes]],
+    dict[str, str],
+]:
+    """一次打开每个详情页，同时保存数据、详情和截图。"""
+
+    snapshots = []
+    details = []
+    screenshots = {}
+    failures = {}
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(
+            channel="chrome",
+            headless=True,
+        )
+        context = browser.new_context(
+            locale="zh-CN",
+            viewport={
+                "width": 1600,
+                "height": 900,
+            },
+        )
+        page = context.new_page()
+
+        try:
+            for index, listing in enumerate(listings):
+                url = str(listing.source_url)
+
+                try:
+                    _open_market_listing_page(page, url)
+                    captured_at = datetime.now().astimezone()
+                    html = page.content()
+
+                    price_cny = extract_visible_listing_price(
+                        page,
+                        listing,
+                    )
+                    snapshot = build_market_listing_snapshot(
+                        listing,
+                        price_cny,
+                        captured_at,
+                    )
+                    detail = parse_market_listing_detail(
+                        html,
+                        url,
+                    )
+                    screenshot_pair = (
+                        _capture_screenshots_from_loaded_page(
+                            page
+                        )
+                    )
+
+                    snapshots.append(snapshot)
+                    details.append(detail)
+                    screenshots[url] = screenshot_pair
+
+                except Exception as error:
+                    failures[url] = str(error)
+
+                if index < len(listings) - 1:
+                    page.wait_for_timeout(2_000)
+
+        finally:
+            context.close()
+            browser.close()
+
+    return snapshots, details, screenshots, failures
 
 
 def parse_market_listings(

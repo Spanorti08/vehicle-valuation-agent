@@ -121,6 +121,23 @@ def apply_condition_rule(
     )
 
 
+def mark_evidence_insufficient(
+    suggestion: AdjustmentSuggestion,
+    reason: str,
+) -> None:
+    """证据不足时强制不调整指数，避免模型猜测。"""
+
+    suggestion.grade_difference = 0
+    suggestion.suggested_index = 100
+    suggestion.direction = "insufficient"
+    suggestion.evidence_sufficient = False
+    suggestion.confidence = min(
+        suggestion.confidence,
+        0.5,
+    )
+    suggestion.reason = reason
+
+
 def generate_comparison_suggestion(
     provider: OllamaProvider,
     rules: AdjustmentRuleSet,
@@ -142,6 +159,24 @@ def generate_comparison_suggestion(
         prompt,
         AIComparisonSuggestion,
     )
+
+    mark_evidence_insufficient(
+        result.inspection,
+        "公开页面仅说明车辆已检测，未提供可与待估车辆"
+        "直接比较的年检或检测结论，因此不作调整。",
+    )
+    mark_evidence_insufficient(
+        result.transfer,
+        "当前输入未记录待估车辆过户次数，无法与案例"
+        "比较，因此不作调整。",
+    )
+
+    if detail.vehicle_use is None:
+        mark_evidence_insufficient(
+            result.vehicle_use,
+            "公开页面未披露案例车辆用途，无法比较，"
+            "因此不作调整。",
+        )
 
     comparable_grade = (
         map_market_condition_grade(

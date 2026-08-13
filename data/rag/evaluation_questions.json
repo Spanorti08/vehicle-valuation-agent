@@ -1,0 +1,107 @@
+[
+  {
+    "question_id": "EVAL-001",
+    "split": "tuning",
+    "question": "使用市场法评估资产需要满足哪些前提条件？",
+    "expected_chunk_ids": ["DOC-002-CHUNK-006"],
+    "allowed_document_types": ["评估方法", "资产类别准则"]
+  },
+  {
+    "question_id": "EVAL-002",
+    "split": "tuning",
+    "question": "选择市场法可比参照物时应当遵循哪些原则？",
+    "expected_chunk_ids": ["DOC-002-CHUNK-007"],
+    "allowed_document_types": ["评估方法", "资产类别准则"]
+  },
+  {
+    "question_id": "EVAL-003",
+    "split": "tuning",
+    "question": "评估对象与可比案例存在价值影响因素差异时应当如何处理？",
+    "expected_chunk_ids": ["DOC-002-CHUNK-008", "DOC-003-CHUNK-022"],
+    "allowed_document_types": ["评估方法", "资产类别准则"]
+  },
+  {
+    "question_id": "EVAL-004",
+    "split": "tuning",
+    "question": "采用市场法评估机器设备时需要关注哪些问题？",
+    "expected_chunk_ids": ["DOC-003-CHUNK-022"],
+    "allowed_document_types": ["评估方法", "资产类别准则"]
+  },
+  {
+    "question_id": "EVAL-005",
+    "split": "tuning",
+    "question": "一份完整的资产评估报告由哪些部分组成？",
+    "expected_chunk_ids": ["DOC-001-CHUNK-021", "DOC-004-CHUNK-012"],
+    "allowed_document_types": ["基本准则", "报告准则"]
+  },
+  {
+    "question_id": "EVAL-006",
+    "split": "tuning",
+    "question": "资产评估报告正文应当包含哪些内容？",
+    "expected_chunk_ids": ["DOC-001-CHUNK-022", "DOC-004-CHUNK-015"],
+    "allowed_document_types": ["基本准则", "报告准则"]
+  },
+  {
+    "question_id": "EVAL-007",
+    "split": "tuning",
+    "question": "资产评估报告的特别事项说明应当披露什么？",
+    "expected_chunk_ids": ["DOC-001-CHUNK-027", "DOC-004-CHUNK-026"],
+    "allowed_document_types": ["基本准则", "报告准则"]
+  },
+  {
+    "question_id": "EVAL-008",
+    "split": "tuning",
+    "question": "资产评估报告的使用限制说明应当载明哪些内容？",
+    "expected_chunk_ids": ["DOC-001-CHUNK-028", "DOC-004-CHUNK-027"],
+    "allowed_document_types": ["基本准则", "报告准则"]
+  },
+  {
+    "question_id": "EVAL-009",
+    "split": "tuning",
+    "question": "资产评估现场调查通常可以采用哪些手段？",
+    "expected_chunk_ids": ["DOC-005-CHUNK-013"],
+    "allowed_document_types": ["基本准则", "程序准则", "资产类别准则"]
+  },
+  {
+    "question_id": "EVAL-010",
+    "split": "tuning",
+    "question": "资产评估专业人员是否需要核查和验证使用的资料？",
+    "expected_chunk_ids": ["DOC-001-CHUNK-015"],
+    "allowed_document_types": ["基本准则", "程序准则"]
+  },
+  {
+    "question_id": "EVAL-011",
+    "split": "test",
+    "question": "资产评估中的市场价值如何定义？",
+    "expected_chunk_ids": ["DOC-006-CHUNK-005"],
+    "allowed_document_types": ["指导意见"]
+  },
+  {
+    "question_id": "EVAL-012",
+    "split": "test",
+    "question": "什么情况下通常选择市场价值作为评估结论的价值类型？",
+    "expected_chunk_ids": ["DOC-006-CHUNK-017"],
+    "allowed_document_types": ["基本准则", "指导意见"]
+  },
+  {
+    "question_id": "EVAL-013",
+    "split": "test",
+    "question": "资产评估专业人员能否对评估对象的法律权属提供保证？",
+    "expected_chunk_ids": ["DOC-007-CHUNK-005"],
+    "allowed_document_types": ["指导意见"]
+  },
+  {
+    "question_id": "EVAL-014",
+    "split": "test",
+    "question": "资产评估委托合同通常应当包括哪些内容？",
+    "expected_chunk_ids": ["DOC-008-CHUNK-007"],
+    "allowed_document_types": ["合同准则"]
+  },
+  {
+    "question_id": "EVAL-015",
+    "split": "test",
+    "question": "项目审核人员需要审核评估程序、评估报告和工作底稿吗？",
+    "expected_chunk_ids": ["DOC-010-CHUNK-016"],
+    "allowed_document_types": ["质量控制"]
+  }
+]

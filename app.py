@@ -30,7 +30,7 @@ from vehicle_valuation.market_scraper import (
     shortlist_market_listings,
     fetch_market_page,
     parse_market_listing_detail,
-    capture_market_listing_screenshots,
+    capture_market_listing_snapshots_batch,
 )
 
 from vehicle_valuation.market_route_retrieval import (
@@ -59,6 +59,21 @@ from vehicle_valuation.excel_exporter import (
     build_case_sheets_excel,
 )
 
+from vehicle_valuation.rag_service import (
+    VehicleValuationRAG,
+)
+from vehicle_valuation.report_evidence import (
+    retrieve_full_report_evidence,
+)
+from vehicle_valuation.report_section_generation import (
+    generate_report_sections,
+)
+from vehicle_valuation.report_assembly import (
+    build_report_draft,
+)
+from vehicle_valuation.report_docx_exporter import (
+    build_report_docx_from_template,
+)
 
 
 MODEL_MAPPING_PATH = (
@@ -104,26 +119,32 @@ def load_cached_market_detail(
     )
 
 
-@st.cache_data(
-    ttl=86_400,
-    show_spinner=False,
-)
-def load_cached_market_screenshots(
-    case_url: str,
-) -> tuple[bytes, bytes]:
-    """抓取并缓存一个市场案例的两张截图。"""
-
-    return capture_market_listing_screenshots(
-        case_url
-    )
-
-
 st.set_page_config(
     page_title="车辆评估助手",
     page_icon="🚗",
 )
 
 st.title("车辆评估助手")
+
+
+DOWNSTREAM_STATE_KEYS = [
+    "market_candidates",
+    "confirmed_market_cases",
+    "market_case_details",
+    "market_case_screenshots",
+    "ai_comparison_suggestions",
+    "adjusted_market_prices",
+    "final_valuation_value",
+    "generated_excel_bytes",
+    "generated_report_bytes",
+]
+
+
+def clear_downstream_state() -> None:
+    """输入或案例变化后清除旧计算和旧下载文件。"""
+
+    for state_key in DOWNSTREAM_STATE_KEYS:
+        st.session_state.pop(state_key, None)
 
 uploaded_file = st.file_uploader(
     "上传车辆评估明细表",
@@ -383,6 +404,8 @@ if uploaded_file is not None:
 
             if st.button("确认现场核查并核对资料"):
                 try:
+                    clear_downstream_state()
+
                     confirmed_inspection = VehicleInspection(
                         inspection_date=inspection_date,
                         actual_mileage_km=actual_mileage_km,
@@ -502,6 +525,8 @@ if uploaded_file is not None:
 
                     elif st.button("搜索市场案例"):
                         try:
+                            clear_downstream_state()
+
                             with st.spinner(
                                 "正在搜索多个城市的市场车源……"
                             ):
@@ -640,50 +665,67 @@ if uploaded_file is not None:
                     ]
 
                     if st.button("确认采用的市场案例"):
+                        for state_key in (
+                            "ai_comparison_suggestions",
+                            "adjusted_market_prices",
+                            "final_valuation_value",
+                            "generated_excel_bytes",
+                            "generated_report_bytes",
+                        ):
+                            st.session_state.pop(
+                                state_key,
+                                None,
+                            )
+
                         if len(selected_market_cases) < 3:
                             st.error(
                                 "至少需要选择 3 个市场案例，"
                                 f"目前只选择了 {len(selected_market_cases)} 个。"
                             )
                         else:
-                            st.session_state[
-                                "confirmed_market_cases"
-                            ] = selected_market_cases
-
-                            with st.spinner("正在读取所选案例的详情……"):
-                                market_case_details = []
-                                failed_detail_urls = []
-
-                                for item in selected_market_cases:
-                                    try:
-                                        case_url = str(item.source_url)
-
-                                        detail = load_cached_market_detail(
-                                            case_url
-                                        )
-
-                                        market_case_details.append(detail)
-
-                                    except Exception as error:
-                                        failed_detail_urls.append(
-                                            f"{item.source_url}：{error}"
-                                        )
-
-                            st.session_state[
-                                "market_case_details"
-                            ] = market_case_details
-
-                            st.success(
-                                f"已确认 {len(selected_market_cases)} 个市场案例"
-                            )
-
-                            if failed_detail_urls:
-                                st.warning(
-                                    f"有 {len(failed_detail_urls)} 个案例详情读取失败"
+                            with st.spinner(
+                                "正在同时保存案例数据、详情和截图……"
+                            ):
+                                (
+                                    snapshot_cases,
+                                    market_case_details,
+                                    case_screenshots,
+                                    snapshot_failures,
+                                ) = capture_market_listing_snapshots_batch(
+                                    selected_market_cases
                                 )
 
-                                for failure in failed_detail_urls:
-                                    st.write(f"- {failure}")
+                            if len(snapshot_cases) < 3:
+                                st.error(
+                                    "成功保存的完整案例不足3个，"
+                                    "请稍后重试或增加候选案例。"
+                                )
+                            else:
+                                st.session_state[
+                                    "confirmed_market_cases"
+                                ] = snapshot_cases
+                                st.session_state[
+                                    "market_case_details"
+                                ] = market_case_details
+                                st.session_state[
+                                    "market_case_screenshots"
+                                ] = case_screenshots
+
+                                st.success(
+                                    f"已确认 {len(snapshot_cases)} 个市场案例，"
+                                    "价格、详情和截图来自同一次网页读取"
+                                )
+
+                            if snapshot_failures:
+                                with st.expander(
+                                    "查看未能保存的案例"
+                                ):
+                                    for case_url, reason in (
+                                        snapshot_failures.items()
+                                    ):
+                                        st.write(
+                                            f"{case_url}：{reason}"
+                                        )
 
                     if "market_case_details" in st.session_state:
                         st.subheader("市场案例详情")
@@ -1043,29 +1085,11 @@ if uploaded_file is not None:
 
                             if st.button("生成Excel结果"):
                                 try:
-                                    case_screenshots = {}
-                                    screenshot_failures = []
-
-                                    with st.spinner(
-                                        "正在生成市场案例截图……"
-                                    ):
-                                        for listing in confirmed_cases:
-                                            case_url = str(
-                                                listing.source_url
-                                            )
-
-                                            try:
-                                                case_screenshots[
-                                                    case_url
-                                                ] = (
-                                                    load_cached_market_screenshots(
-                                                        case_url
-                                                    )
-                                                )
-                                            except Exception as error:
-                                                screenshot_failures.append(
-                                                    f"{case_url}：{error}"
-                                                )
+                                    case_screenshots = (
+                                        st.session_state[
+                                            "market_case_screenshots"
+                                        ]
+                                    )
                                     excel_result = build_case_sheets_excel(
                                         excel_bytes=uploaded_file.getvalue(),
                                         listings=confirmed_cases,
@@ -1088,12 +1112,6 @@ if uploaded_file is not None:
 
                                     st.success("Excel生成成功")
 
-                                    if screenshot_failures:
-                                        st.warning(
-                                            f"有 {len(screenshot_failures)} "
-                                            "个案例截图失败，Excel其他内容仍已生成"
-                                        )
-
                                 except Exception as error:
                                     st.error(f"Excel生成失败：{error}")
 
@@ -1107,6 +1125,183 @@ if uploaded_file is not None:
                                     mime=(
                                         "application/vnd.openxmlformats-"
                                         "officedocument.spreadsheetml.sheet"
+                                    ),
+                                )
+
+                            if st.button("生成Word报告初稿"):
+                                try:
+                                    with st.spinner(
+                                        "正在检索评估准则并生成报告……"
+                                    ):
+                                        request = st.session_state[
+                                            "valuation_request"
+                                        ]
+                                        confirmed_cases = st.session_state[
+                                            "confirmed_market_cases"
+                                        ]
+
+                                        rag = VehicleValuationRAG(
+                                            Path(
+                                                "data/rag/processed/"
+                                                "chunks.jsonl"
+                                            ),
+                                            Path(
+                                                "data/rag/processed/"
+                                                "faiss.index"
+                                            ),
+                                        )
+
+                                        evidence = (
+                                            retrieve_full_report_evidence(
+                                                rag
+                                            )
+                                        )
+
+                                        report_sections = (
+                                            generate_report_sections(
+                                                evidence=evidence,
+                                            )
+                                        )
+
+                                        report_draft = build_report_draft(
+                                            request=request,
+                                            listings=confirmed_cases,
+                                            final_value=final_value,
+                                            evidence=evidence,
+                                            sections=report_sections,
+                                        )
+
+                                        vehicle = (
+                                            request.subject_vehicle
+                                        )
+                                        license_data = (
+                                            request.driving_license
+                                        )
+
+                                        increase_value = (
+                                            final_value
+                                            - vehicle.book_value_net_cny
+                                        )
+
+                                        if (
+                                            vehicle.book_value_net_cny
+                                            > 0
+                                        ):
+                                            increase_rate = (
+                                                increase_value
+                                                / vehicle.book_value_net_cny
+                                                * 100
+                                            )
+                                            increase_rate_text = (
+                                                f"{increase_rate:.2f}%"
+                                            )
+                                        else:
+                                            increase_rate_text = (
+                                                "不适用"
+                                            )
+
+                                        fact_replacements = {
+                                            "{{CLIENT_NAME}}": (
+                                                license_data.owner_name
+                                            ),
+                                            "{{CLIENT_SHORT_NAME}}": (
+                                                license_data.owner_name
+                                            ),
+                                            "{{CLIENT_CREDIT_CODE}}": (
+                                                "待补充"
+                                            ),
+                                            "{{CLIENT_TYPE}}": "待补充",
+                                            "{{CLIENT_ADDRESS}}": (
+                                                license_data.address
+                                            ),
+                                            "{{CLIENT_RESPONSIBLE_PERSON}}": (
+                                                "待补充"
+                                            ),
+                                            "{{CLIENT_ESTABLISHMENT_DATE}}": (
+                                                "待补充"
+                                            ),
+                                            "{{CLIENT_OPERATION_PERIOD}}": (
+                                                "待补充"
+                                            ),
+                                            "{{CLIENT_BUSINESS_SCOPE}}": (
+                                                "待补充"
+                                            ),
+                                            "{{VALUATION_AGENCY}}": (
+                                                "评估机构待补充"
+                                            ),
+                                            "{{REPORT_NUMBER}}": (
+                                                "自动生成初稿（待编号）"
+                                            ),
+                                            "{{REPORT_DATE}}": (
+                                                f"{date.today():%Y年%m月%d日}"
+                                            ),
+                                            "{{ECONOMIC_ACTION_BASIS}}": (
+                                                "经济行为依据待补充"
+                                            ),
+                                            "{{VEHICLE_NAME}}": (
+                                                vehicle.vehicle_name
+                                            ),
+                                            "{{PLATE_NUMBER}}": (
+                                                vehicle.plate_number
+                                            ),
+                                            "{{VALUATION_DATE}}": (
+                                                request.valuation_date.strftime(
+                                                    "%Y年%m月%d日"
+                                                )
+                                            ),
+                                            "{{BOOK_VALUE_ORIGINAL}}": (
+                                                f"{vehicle.book_value_original_cny / 10000:.2f}"
+                                                "万元"
+                                            ),
+                                            "{{BOOK_VALUE_NET}}": (
+                                                f"{vehicle.book_value_net_cny / 10000:.2f}"
+                                                "万元"
+                                            ),
+                                            "{{VALUATION_RESULT}}": (
+                                                f"{final_value / 10000:.2f}"
+                                                "万元"
+                                            ),
+                                            "{{VALUATION_INCREASE}}": (
+                                                f"{increase_value / 10000:.2f}"
+                                                "万元"
+                                            ),
+                                            "{{VALUATION_INCREASE_RATE}}": (
+                                                increase_rate_text
+                                            ),
+                                        }
+
+                                        report_bytes = (
+                                            build_report_docx_from_template(
+                                                report_draft,
+                                                fact_replacements,
+                                            )
+                                        )
+
+                                        st.session_state[
+                                            "generated_report_bytes"
+                                        ] = report_bytes
+
+                                    st.success("Word报告初稿生成成功")
+
+                                except Exception as error:
+                                    st.error(
+                                        f"Word报告生成失败：{error}"
+                                    )
+
+                            if (
+                                "generated_report_bytes"
+                                in st.session_state
+                            ):
+                                st.download_button(
+                                    label="下载Word报告初稿",
+                                    data=st.session_state[
+                                        "generated_report_bytes"
+                                    ],
+                                    file_name="车辆评估报告初稿.docx",
+                                    mime=(
+                                        "application/vnd.openxmlformats-"
+                                        "officedocument.wordprocessingml."
+                                        "document"
                                     ),
                                 )
 

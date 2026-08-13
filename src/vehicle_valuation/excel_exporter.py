@@ -1,5 +1,7 @@
 from io import BytesIO
+import hashlib
 import re
+from datetime import date
 
 from openpyxl import load_workbook
 from openpyxl.styles import (
@@ -22,6 +24,124 @@ from vehicle_valuation.adjustment_rules import (
 )
 
 from openpyxl.drawing.image import Image
+
+
+def validate_case_export_inputs(
+    listings: list[MarketListing],
+    details: list[MarketListingDetail],
+    screenshots: dict[str, tuple[bytes, bytes]],
+) -> None:
+    """确认案例、详情和截图按URL一一对应且没有重复。"""
+
+    listing_urls = [
+        str(listing.source_url)
+        for listing in listings
+    ]
+    detail_urls = {
+        str(detail.source_url)
+        for detail in details
+    }
+    screenshot_urls = set(screenshots)
+
+    if len(listing_urls) < 3:
+        raise ValueError("至少需要3个市场案例")
+
+    if len(listing_urls) != len(set(listing_urls)):
+        raise ValueError("市场案例中存在重复的车源链接")
+
+    missing_details = set(listing_urls) - detail_urls
+    missing_screenshots = set(listing_urls) - screenshot_urls
+
+    if missing_details:
+        raise ValueError(
+            "以下案例缺少详情："
+            + "、".join(sorted(missing_details))
+        )
+
+    if missing_screenshots:
+        raise ValueError(
+            "以下案例缺少截图："
+            + "、".join(sorted(missing_screenshots))
+        )
+
+    screenshot_fingerprints = []
+
+    for case_url in listing_urls:
+        top_image, detail_image = screenshots[case_url]
+
+        if not top_image or not detail_image:
+            raise ValueError(
+                f"案例截图内容为空：{case_url}"
+            )
+
+        fingerprint = hashlib.sha256(
+            top_image + detail_image
+        ).hexdigest()
+        screenshot_fingerprints.append(fingerprint)
+
+    if len(screenshot_fingerprints) != len(
+        set(screenshot_fingerprints)
+    ):
+        raise ValueError(
+            "不同市场案例生成了完全相同的截图，"
+            "请重新抓取后再导出"
+        )
+
+
+def prepare_vehicle_export_workbook(
+    workbook,
+    request: ValuationRequest,
+) -> None:
+    """清除模板旧项目数据，并写入本次待估车辆信息。"""
+
+    if "secretkey" in workbook.sheetnames:
+        workbook.remove(workbook["secretkey"])
+
+    if "封面" in workbook.sheetnames:
+        cover = workbook["封面"]
+        cover["F7"] = request.driving_license.owner_name
+        cover["F9"] = request.valuation_date.year
+        cover["H9"] = request.valuation_date.month
+        cover["J9"] = request.valuation_date.day
+        cover["G11"] = None
+        cover["F13"] = date.today().year
+        cover["H13"] = date.today().month
+        cover["J13"] = date.today().day
+        cover["G26"] = None
+
+    if "车辆" not in workbook.sheetnames:
+        raise ValueError("Excel中缺少“车辆”sheet")
+
+    sheet = workbook["车辆"]
+
+    for row in sheet.iter_rows(
+        min_row=7,
+        max_row=26,
+        min_col=1,
+        max_col=28,
+    ):
+        for cell in row:
+            cell.value = None
+
+    vehicle = request.subject_vehicle
+    license_data = request.driving_license
+
+    sheet["A7"] = 1
+    sheet["B7"] = vehicle.asset_id
+    sheet["C7"] = vehicle.plate_number
+    sheet["D7"] = vehicle.vehicle_name
+    sheet["F7"] = vehicle.manufacturer
+    sheet["G7"] = vehicle.unit
+    sheet["H7"] = vehicle.quantity
+    sheet["I7"] = date.fromisoformat(f"{vehicle.purchase_date}-01")
+    sheet["J7"] = date.fromisoformat(f"{vehicle.in_service_date}-01")
+    sheet["K7"] = vehicle.mileage_km
+    sheet["P7"] = float(vehicle.book_value_original_cny)
+    sheet["Q7"] = float(vehicle.book_value_net_cny)
+    sheet["U7"] = '=IF(Q7=0,"",(T7-Q7)/Q7*100)'
+    sheet["W7"] = license_data.owner_name
+    sheet["Y7"] = license_data.vin
+    sheet["Z7"] = "=Q7/10000"
 
 
 def write_calculation_sheet(
@@ -809,6 +929,28 @@ def write_calculation_sheet(
     return final_cell.coordinate
 
 
+def clear_hidden_legacy_formula_errors(workbook) -> int:
+    """清理未参与车辆评估的隐藏模板页中的失效引用。"""
+
+    cleared_count = 0
+
+    for legacy_sheet in workbook.worksheets:
+        if legacy_sheet.sheet_state != "hidden":
+            continue
+
+        for row in legacy_sheet.iter_rows():
+            for cell in row:
+                if (
+                    isinstance(cell.value, str)
+                    and cell.value.startswith("=")
+                    and "#REF!" in cell.value
+                ):
+                    cell.value = 0
+                    cleared_count += 1
+
+    return cleared_count
+
+
 def build_case_sheets_excel(
     excel_bytes: bytes,
     listings: list[MarketListing],
@@ -824,9 +966,22 @@ def build_case_sheets_excel(
 ) -> bytes:
     """生成案例sheet和计算表，并返回新的Excel文件内容。"""
 
+    validate_case_export_inputs(
+        listings,
+        details,
+        screenshots,
+    )
+
     workbook = load_workbook(
         BytesIO(excel_bytes)
     )
+
+    # 原始行业模板包含一些当前车辆项目未使用的隐藏校验公式，
+    # 其中可能带有已经失效的 #REF! 引用。它们不参与本项目计算，
+    # 导出时将其清零，避免最终工作簿留下公式错误。
+    clear_hidden_legacy_formula_errors(workbook)
+
+    prepare_vehicle_export_workbook(workbook, request)
 
     if "案例1" not in workbook.sheetnames:
         raise ValueError(
@@ -889,8 +1044,16 @@ def build_case_sheets_excel(
         sheet["I13"] = float(
             listing.price_cny
         )
+        captured_note = (
+            listing.captured_at.strftime(
+                "%Y-%m-%d %H:%M:%S %z"
+            )
+            if listing.captured_at
+            else "抓取时间未记录"
+        )
         sheet["J13"] = (
-            "公开挂牌价，未经电话询价确认"
+            "公开挂牌价，未经电话询价确认；"
+            f"网页抓取时间：{captured_note}"
         )
 
         case_screenshots = screenshots.get(
@@ -949,7 +1112,7 @@ def build_case_sheets_excel(
     ):
         sheet.title = f"案例{index}"
 
-    write_calculation_sheet(
+    final_value_cell = write_calculation_sheet(
         workbook=workbook,
         request=request,
         listings=listings,
@@ -958,6 +1121,10 @@ def build_case_sheets_excel(
         formula_rows=formula_rows,
         rules=rules,
     )
+
+    vehicle_sheet = workbook["车辆"]
+    vehicle_sheet["R7"] = f"='计算表'!{final_value_cell}"
+    vehicle_sheet["T7"] = f"='计算表'!{final_value_cell}"
 
     workbook.calculation.fullCalcOnLoad = True
     workbook.calculation.forceFullCalc = True

@@ -1,0 +1,985 @@
+{
+  "top_k": 3,
+  "question_count": 15,
+  "tuning_question_count": 10,
+  "test_question_count": 5,
+  "weight_candidates": [
+    {
+      "retriever": "hybrid_rrf_bm25_1.0_vector_1.0",
+      "question_count": 10,
+      "hit_rate_at_3": 0.9,
+      "mean_recall_at_3": 0.85,
+      "mrr_at_3": 0.85,
+      "questions": [
+        {
+          "question_id": "EVAL-001",
+          "question": "使用市场法评估资产需要满足哪些前提条件？",
+          "expected_chunk_ids": [
+            "DOC-002-CHUNK-006"
+          ],
+          "returned_chunk_ids": [
+            "DOC-002-CHUNK-006",
+            "DOC-002-CHUNK-004",
+            "DOC-003-CHUNK-022"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-002",
+          "question": "选择市场法可比参照物时应当遵循哪些原则？",
+          "expected_chunk_ids": [
+            "DOC-002-CHUNK-007"
+          ],
+          "returned_chunk_ids": [
+            "DOC-002-CHUNK-007",
+            "DOC-002-CHUNK-005",
+            "DOC-002-CHUNK-006"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-003",
+          "question": "评估对象与可比案例存在价值影响因素差异时应当如何处理？",
+          "expected_chunk_ids": [
+            "DOC-002-CHUNK-008",
+            "DOC-003-CHUNK-022"
+          ],
+          "returned_chunk_ids": [
+            "DOC-002-CHUNK-008",
+            "DOC-002-CHUNK-007",
+            "DOC-002-CHUNK-022"
+          ],
+          "hit": 1,
+          "recall": 0.5,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-004",
+          "question": "采用市场法评估机器设备时需要关注哪些问题？",
+          "expected_chunk_ids": [
+            "DOC-003-CHUNK-022"
+          ],
+          "returned_chunk_ids": [
+            "DOC-003-CHUNK-022",
+            "DOC-003-CHUNK-020",
+            "DOC-003-CHUNK-009"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-005",
+          "question": "一份完整的资产评估报告由哪些部分组成？",
+          "expected_chunk_ids": [
+            "DOC-001-CHUNK-021",
+            "DOC-004-CHUNK-012"
+          ],
+          "returned_chunk_ids": [
+            "DOC-001-CHUNK-030",
+            "DOC-001-CHUNK-029",
+            "DOC-004-CHUNK-009"
+          ],
+          "hit": 0,
+          "recall": 0.0,
+          "reciprocal_rank": 0.0,
+          "first_relevant_rank": null
+        },
+        {
+          "question_id": "EVAL-006",
+          "question": "资产评估报告正文应当包含哪些内容？",
+          "expected_chunk_ids": [
+            "DOC-001-CHUNK-022",
+            "DOC-004-CHUNK-015"
+          ],
+          "returned_chunk_ids": [
+            "DOC-001-CHUNK-021",
+            "DOC-001-CHUNK-022",
+            "DOC-004-CHUNK-015"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 0.5,
+          "first_relevant_rank": 2
+        },
+        {
+          "question_id": "EVAL-007",
+          "question": "资产评估报告的特别事项说明应当披露什么？",
+          "expected_chunk_ids": [
+            "DOC-001-CHUNK-027",
+            "DOC-004-CHUNK-026"
+          ],
+          "returned_chunk_ids": [
+            "DOC-004-CHUNK-026",
+            "DOC-001-CHUNK-027",
+            "DOC-004-CHUNK-022"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-008",
+          "question": "资产评估报告的使用限制说明应当载明哪些内容？",
+          "expected_chunk_ids": [
+            "DOC-001-CHUNK-028",
+            "DOC-004-CHUNK-027"
+          ],
+          "returned_chunk_ids": [
+            "DOC-001-CHUNK-028",
+            "DOC-004-CHUNK-027",
+            "DOC-004-CHUNK-013"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-009",
+          "question": "资产评估现场调查通常可以采用哪些手段？",
+          "expected_chunk_ids": [
+            "DOC-005-CHUNK-013"
+          ],
+          "returned_chunk_ids": [
+            "DOC-005-CHUNK-013",
+            "DOC-001-CHUNK-013",
+            "DOC-003-CHUNK-015"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-010",
+          "question": "资产评估专业人员是否需要核查和验证使用的资料？",
+          "expected_chunk_ids": [
+            "DOC-001-CHUNK-015"
+          ],
+          "returned_chunk_ids": [
+            "DOC-001-CHUNK-015",
+            "DOC-005-CHUNK-016",
+            "DOC-005-CHUNK-017"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        }
+      ],
+      "bm25_weight": 1.0,
+      "vector_weight": 1.0
+    },
+    {
+      "retriever": "hybrid_rrf_bm25_0.75_vector_1.0",
+      "question_count": 10,
+      "hit_rate_at_3": 1.0,
+      "mean_recall_at_3": 0.9,
+      "mrr_at_3": 0.9333333333333332,
+      "questions": [
+        {
+          "question_id": "EVAL-001",
+          "question": "使用市场法评估资产需要满足哪些前提条件？",
+          "expected_chunk_ids": [
+            "DOC-002-CHUNK-006"
+          ],
+          "returned_chunk_ids": [
+            "DOC-002-CHUNK-006",
+            "DOC-002-CHUNK-004",
+            "DOC-003-CHUNK-022"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-002",
+          "question": "选择市场法可比参照物时应当遵循哪些原则？",
+          "expected_chunk_ids": [
+            "DOC-002-CHUNK-007"
+          ],
+          "returned_chunk_ids": [
+            "DOC-002-CHUNK-007",
+            "DOC-002-CHUNK-005",
+            "DOC-002-CHUNK-008"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-003",
+          "question": "评估对象与可比案例存在价值影响因素差异时应当如何处理？",
+          "expected_chunk_ids": [
+            "DOC-002-CHUNK-008",
+            "DOC-003-CHUNK-022"
+          ],
+          "returned_chunk_ids": [
+            "DOC-002-CHUNK-008",
+            "DOC-002-CHUNK-007",
+            "DOC-002-CHUNK-022"
+          ],
+          "hit": 1,
+          "recall": 0.5,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-004",
+          "question": "采用市场法评估机器设备时需要关注哪些问题？",
+          "expected_chunk_ids": [
+            "DOC-003-CHUNK-022"
+          ],
+          "returned_chunk_ids": [
+            "DOC-003-CHUNK-022",
+            "DOC-003-CHUNK-020",
+            "DOC-003-CHUNK-009"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-005",
+          "question": "一份完整的资产评估报告由哪些部分组成？",
+          "expected_chunk_ids": [
+            "DOC-001-CHUNK-021",
+            "DOC-004-CHUNK-012"
+          ],
+          "returned_chunk_ids": [
+            "DOC-001-CHUNK-030",
+            "DOC-001-CHUNK-029",
+            "DOC-001-CHUNK-021"
+          ],
+          "hit": 1,
+          "recall": 0.5,
+          "reciprocal_rank": 0.3333333333333333,
+          "first_relevant_rank": 3
+        },
+        {
+          "question_id": "EVAL-006",
+          "question": "资产评估报告正文应当包含哪些内容？",
+          "expected_chunk_ids": [
+            "DOC-001-CHUNK-022",
+            "DOC-004-CHUNK-015"
+          ],
+          "returned_chunk_ids": [
+            "DOC-001-CHUNK-022",
+            "DOC-001-CHUNK-021",
+            "DOC-004-CHUNK-015"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-007",
+          "question": "资产评估报告的特别事项说明应当披露什么？",
+          "expected_chunk_ids": [
+            "DOC-001-CHUNK-027",
+            "DOC-004-CHUNK-026"
+          ],
+          "returned_chunk_ids": [
+            "DOC-004-CHUNK-026",
+            "DOC-001-CHUNK-027",
+            "DOC-004-CHUNK-022"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-008",
+          "question": "资产评估报告的使用限制说明应当载明哪些内容？",
+          "expected_chunk_ids": [
+            "DOC-001-CHUNK-028",
+            "DOC-004-CHUNK-027"
+          ],
+          "returned_chunk_ids": [
+            "DOC-001-CHUNK-028",
+            "DOC-004-CHUNK-027",
+            "DOC-004-CHUNK-013"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-009",
+          "question": "资产评估现场调查通常可以采用哪些手段？",
+          "expected_chunk_ids": [
+            "DOC-005-CHUNK-013"
+          ],
+          "returned_chunk_ids": [
+            "DOC-005-CHUNK-013",
+            "DOC-001-CHUNK-013",
+            "DOC-003-CHUNK-017"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-010",
+          "question": "资产评估专业人员是否需要核查和验证使用的资料？",
+          "expected_chunk_ids": [
+            "DOC-001-CHUNK-015"
+          ],
+          "returned_chunk_ids": [
+            "DOC-001-CHUNK-015",
+            "DOC-005-CHUNK-016",
+            "DOC-005-CHUNK-017"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        }
+      ],
+      "bm25_weight": 0.75,
+      "vector_weight": 1.0
+    },
+    {
+      "retriever": "hybrid_rrf_bm25_0.5_vector_1.0",
+      "question_count": 10,
+      "hit_rate_at_3": 1.0,
+      "mean_recall_at_3": 0.9,
+      "mrr_at_3": 0.8833333333333334,
+      "questions": [
+        {
+          "question_id": "EVAL-001",
+          "question": "使用市场法评估资产需要满足哪些前提条件？",
+          "expected_chunk_ids": [
+            "DOC-002-CHUNK-006"
+          ],
+          "returned_chunk_ids": [
+            "DOC-002-CHUNK-006",
+            "DOC-002-CHUNK-004",
+            "DOC-003-CHUNK-022"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-002",
+          "question": "选择市场法可比参照物时应当遵循哪些原则？",
+          "expected_chunk_ids": [
+            "DOC-002-CHUNK-007"
+          ],
+          "returned_chunk_ids": [
+            "DOC-002-CHUNK-007",
+            "DOC-002-CHUNK-005",
+            "DOC-002-CHUNK-008"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-003",
+          "question": "评估对象与可比案例存在价值影响因素差异时应当如何处理？",
+          "expected_chunk_ids": [
+            "DOC-002-CHUNK-008",
+            "DOC-003-CHUNK-022"
+          ],
+          "returned_chunk_ids": [
+            "DOC-002-CHUNK-007",
+            "DOC-002-CHUNK-008",
+            "DOC-002-CHUNK-022"
+          ],
+          "hit": 1,
+          "recall": 0.5,
+          "reciprocal_rank": 0.5,
+          "first_relevant_rank": 2
+        },
+        {
+          "question_id": "EVAL-004",
+          "question": "采用市场法评估机器设备时需要关注哪些问题？",
+          "expected_chunk_ids": [
+            "DOC-003-CHUNK-022"
+          ],
+          "returned_chunk_ids": [
+            "DOC-003-CHUNK-022",
+            "DOC-003-CHUNK-020",
+            "DOC-003-CHUNK-009"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-005",
+          "question": "一份完整的资产评估报告由哪些部分组成？",
+          "expected_chunk_ids": [
+            "DOC-001-CHUNK-021",
+            "DOC-004-CHUNK-012"
+          ],
+          "returned_chunk_ids": [
+            "DOC-001-CHUNK-030",
+            "DOC-001-CHUNK-029",
+            "DOC-001-CHUNK-021"
+          ],
+          "hit": 1,
+          "recall": 0.5,
+          "reciprocal_rank": 0.3333333333333333,
+          "first_relevant_rank": 3
+        },
+        {
+          "question_id": "EVAL-006",
+          "question": "资产评估报告正文应当包含哪些内容？",
+          "expected_chunk_ids": [
+            "DOC-001-CHUNK-022",
+            "DOC-004-CHUNK-015"
+          ],
+          "returned_chunk_ids": [
+            "DOC-001-CHUNK-022",
+            "DOC-001-CHUNK-021",
+            "DOC-004-CHUNK-015"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-007",
+          "question": "资产评估报告的特别事项说明应当披露什么？",
+          "expected_chunk_ids": [
+            "DOC-001-CHUNK-027",
+            "DOC-004-CHUNK-026"
+          ],
+          "returned_chunk_ids": [
+            "DOC-004-CHUNK-026",
+            "DOC-001-CHUNK-027",
+            "DOC-004-CHUNK-022"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-008",
+          "question": "资产评估报告的使用限制说明应当载明哪些内容？",
+          "expected_chunk_ids": [
+            "DOC-001-CHUNK-028",
+            "DOC-004-CHUNK-027"
+          ],
+          "returned_chunk_ids": [
+            "DOC-001-CHUNK-028",
+            "DOC-004-CHUNK-027",
+            "DOC-004-CHUNK-013"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-009",
+          "question": "资产评估现场调查通常可以采用哪些手段？",
+          "expected_chunk_ids": [
+            "DOC-005-CHUNK-013"
+          ],
+          "returned_chunk_ids": [
+            "DOC-005-CHUNK-013",
+            "DOC-001-CHUNK-013",
+            "DOC-003-CHUNK-017"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-010",
+          "question": "资产评估专业人员是否需要核查和验证使用的资料？",
+          "expected_chunk_ids": [
+            "DOC-001-CHUNK-015"
+          ],
+          "returned_chunk_ids": [
+            "DOC-001-CHUNK-015",
+            "DOC-005-CHUNK-016",
+            "DOC-005-CHUNK-017"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        }
+      ],
+      "bm25_weight": 0.5,
+      "vector_weight": 1.0
+    },
+    {
+      "retriever": "hybrid_rrf_bm25_0.25_vector_1.0",
+      "question_count": 10,
+      "hit_rate_at_3": 1.0,
+      "mean_recall_at_3": 0.9,
+      "mrr_at_3": 0.8833333333333334,
+      "questions": [
+        {
+          "question_id": "EVAL-001",
+          "question": "使用市场法评估资产需要满足哪些前提条件？",
+          "expected_chunk_ids": [
+            "DOC-002-CHUNK-006"
+          ],
+          "returned_chunk_ids": [
+            "DOC-002-CHUNK-006",
+            "DOC-003-CHUNK-022",
+            "DOC-002-CHUNK-004"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-002",
+          "question": "选择市场法可比参照物时应当遵循哪些原则？",
+          "expected_chunk_ids": [
+            "DOC-002-CHUNK-007"
+          ],
+          "returned_chunk_ids": [
+            "DOC-002-CHUNK-007",
+            "DOC-002-CHUNK-008",
+            "DOC-002-CHUNK-005"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-003",
+          "question": "评估对象与可比案例存在价值影响因素差异时应当如何处理？",
+          "expected_chunk_ids": [
+            "DOC-002-CHUNK-008",
+            "DOC-003-CHUNK-022"
+          ],
+          "returned_chunk_ids": [
+            "DOC-002-CHUNK-007",
+            "DOC-002-CHUNK-008",
+            "DOC-002-CHUNK-022"
+          ],
+          "hit": 1,
+          "recall": 0.5,
+          "reciprocal_rank": 0.5,
+          "first_relevant_rank": 2
+        },
+        {
+          "question_id": "EVAL-004",
+          "question": "采用市场法评估机器设备时需要关注哪些问题？",
+          "expected_chunk_ids": [
+            "DOC-003-CHUNK-022"
+          ],
+          "returned_chunk_ids": [
+            "DOC-003-CHUNK-022",
+            "DOC-003-CHUNK-020",
+            "DOC-003-CHUNK-009"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-005",
+          "question": "一份完整的资产评估报告由哪些部分组成？",
+          "expected_chunk_ids": [
+            "DOC-001-CHUNK-021",
+            "DOC-004-CHUNK-012"
+          ],
+          "returned_chunk_ids": [
+            "DOC-001-CHUNK-030",
+            "DOC-001-CHUNK-029",
+            "DOC-001-CHUNK-021"
+          ],
+          "hit": 1,
+          "recall": 0.5,
+          "reciprocal_rank": 0.3333333333333333,
+          "first_relevant_rank": 3
+        },
+        {
+          "question_id": "EVAL-006",
+          "question": "资产评估报告正文应当包含哪些内容？",
+          "expected_chunk_ids": [
+            "DOC-001-CHUNK-022",
+            "DOC-004-CHUNK-015"
+          ],
+          "returned_chunk_ids": [
+            "DOC-001-CHUNK-022",
+            "DOC-004-CHUNK-015",
+            "DOC-001-CHUNK-021"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-007",
+          "question": "资产评估报告的特别事项说明应当披露什么？",
+          "expected_chunk_ids": [
+            "DOC-001-CHUNK-027",
+            "DOC-004-CHUNK-026"
+          ],
+          "returned_chunk_ids": [
+            "DOC-004-CHUNK-026",
+            "DOC-001-CHUNK-027",
+            "DOC-004-CHUNK-022"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-008",
+          "question": "资产评估报告的使用限制说明应当载明哪些内容？",
+          "expected_chunk_ids": [
+            "DOC-001-CHUNK-028",
+            "DOC-004-CHUNK-027"
+          ],
+          "returned_chunk_ids": [
+            "DOC-001-CHUNK-028",
+            "DOC-004-CHUNK-027",
+            "DOC-004-CHUNK-013"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-009",
+          "question": "资产评估现场调查通常可以采用哪些手段？",
+          "expected_chunk_ids": [
+            "DOC-005-CHUNK-013"
+          ],
+          "returned_chunk_ids": [
+            "DOC-005-CHUNK-013",
+            "DOC-003-CHUNK-017",
+            "DOC-001-CHUNK-013"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-010",
+          "question": "资产评估专业人员是否需要核查和验证使用的资料？",
+          "expected_chunk_ids": [
+            "DOC-001-CHUNK-015"
+          ],
+          "returned_chunk_ids": [
+            "DOC-001-CHUNK-015",
+            "DOC-005-CHUNK-016",
+            "DOC-005-CHUNK-017"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        }
+      ],
+      "bm25_weight": 0.25,
+      "vector_weight": 1.0
+    }
+  ],
+  "selected_weights": {
+    "bm25_weight": 0.75,
+    "vector_weight": 1.0
+  },
+  "test_results": [
+    {
+      "retriever": "bm25",
+      "question_count": 5,
+      "hit_rate_at_3": 0.6,
+      "mean_recall_at_3": 0.6,
+      "mrr_at_3": 0.6,
+      "questions": [
+        {
+          "question_id": "EVAL-011",
+          "question": "资产评估中的市场价值如何定义？",
+          "expected_chunk_ids": [
+            "DOC-006-CHUNK-005"
+          ],
+          "returned_chunk_ids": [
+            "DOC-006-CHUNK-017",
+            "DOC-006-CHUNK-004",
+            "DOC-006-CHUNK-011"
+          ],
+          "hit": 0,
+          "recall": 0.0,
+          "reciprocal_rank": 0.0,
+          "first_relevant_rank": null
+        },
+        {
+          "question_id": "EVAL-012",
+          "question": "什么情况下通常选择市场价值作为评估结论的价值类型？",
+          "expected_chunk_ids": [
+            "DOC-006-CHUNK-017"
+          ],
+          "returned_chunk_ids": [
+            "DOC-006-CHUNK-017",
+            "DOC-006-CHUNK-023",
+            "DOC-006-CHUNK-024"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-013",
+          "question": "资产评估专业人员能否对评估对象的法律权属提供保证？",
+          "expected_chunk_ids": [
+            "DOC-007-CHUNK-005"
+          ],
+          "returned_chunk_ids": [
+            "DOC-007-CHUNK-005",
+            "DOC-007-CHUNK-009",
+            "DOC-007-CHUNK-003"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-014",
+          "question": "资产评估委托合同通常应当包括哪些内容？",
+          "expected_chunk_ids": [
+            "DOC-008-CHUNK-007"
+          ],
+          "returned_chunk_ids": [
+            "DOC-008-CHUNK-013",
+            "DOC-008-CHUNK-006",
+            "DOC-008-CHUNK-011"
+          ],
+          "hit": 0,
+          "recall": 0.0,
+          "reciprocal_rank": 0.0,
+          "first_relevant_rank": null
+        },
+        {
+          "question_id": "EVAL-015",
+          "question": "项目审核人员需要审核评估程序、评估报告和工作底稿吗？",
+          "expected_chunk_ids": [
+            "DOC-010-CHUNK-016"
+          ],
+          "returned_chunk_ids": [
+            "DOC-010-CHUNK-016",
+            "DOC-010-CHUNK-041",
+            "DOC-010-CHUNK-015"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        }
+      ]
+    },
+    {
+      "retriever": "faiss",
+      "question_count": 5,
+      "hit_rate_at_3": 1.0,
+      "mean_recall_at_3": 1.0,
+      "mrr_at_3": 0.8666666666666668,
+      "questions": [
+        {
+          "question_id": "EVAL-011",
+          "question": "资产评估中的市场价值如何定义？",
+          "expected_chunk_ids": [
+            "DOC-006-CHUNK-005"
+          ],
+          "returned_chunk_ids": [
+            "DOC-006-CHUNK-005",
+            "DOC-006-CHUNK-017",
+            "DOC-006-CHUNK-004"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-012",
+          "question": "什么情况下通常选择市场价值作为评估结论的价值类型？",
+          "expected_chunk_ids": [
+            "DOC-006-CHUNK-017"
+          ],
+          "returned_chunk_ids": [
+            "DOC-006-CHUNK-017",
+            "DOC-006-CHUNK-020",
+            "DOC-006-CHUNK-023"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-013",
+          "question": "资产评估专业人员能否对评估对象的法律权属提供保证？",
+          "expected_chunk_ids": [
+            "DOC-007-CHUNK-005"
+          ],
+          "returned_chunk_ids": [
+            "DOC-007-CHUNK-006",
+            "DOC-007-CHUNK-009",
+            "DOC-007-CHUNK-005"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 0.3333333333333333,
+          "first_relevant_rank": 3
+        },
+        {
+          "question_id": "EVAL-014",
+          "question": "资产评估委托合同通常应当包括哪些内容？",
+          "expected_chunk_ids": [
+            "DOC-008-CHUNK-007"
+          ],
+          "returned_chunk_ids": [
+            "DOC-008-CHUNK-007",
+            "DOC-008-CHUNK-003",
+            "DOC-008-CHUNK-012"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-015",
+          "question": "项目审核人员需要审核评估程序、评估报告和工作底稿吗？",
+          "expected_chunk_ids": [
+            "DOC-010-CHUNK-016"
+          ],
+          "returned_chunk_ids": [
+            "DOC-010-CHUNK-016",
+            "DOC-010-CHUNK-041",
+            "DOC-010-CHUNK-017"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        }
+      ]
+    },
+    {
+      "retriever": "weighted_hybrid_rrf",
+      "question_count": 5,
+      "hit_rate_at_3": 0.8,
+      "mean_recall_at_3": 0.8,
+      "mrr_at_3": 0.7,
+      "questions": [
+        {
+          "question_id": "EVAL-011",
+          "question": "资产评估中的市场价值如何定义？",
+          "expected_chunk_ids": [
+            "DOC-006-CHUNK-005"
+          ],
+          "returned_chunk_ids": [
+            "DOC-006-CHUNK-017",
+            "DOC-006-CHUNK-004",
+            "DOC-006-CHUNK-019"
+          ],
+          "hit": 0,
+          "recall": 0.0,
+          "reciprocal_rank": 0.0,
+          "first_relevant_rank": null
+        },
+        {
+          "question_id": "EVAL-012",
+          "question": "什么情况下通常选择市场价值作为评估结论的价值类型？",
+          "expected_chunk_ids": [
+            "DOC-006-CHUNK-017"
+          ],
+          "returned_chunk_ids": [
+            "DOC-006-CHUNK-017",
+            "DOC-006-CHUNK-023",
+            "DOC-006-CHUNK-020"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-013",
+          "question": "资产评估专业人员能否对评估对象的法律权属提供保证？",
+          "expected_chunk_ids": [
+            "DOC-007-CHUNK-005"
+          ],
+          "returned_chunk_ids": [
+            "DOC-007-CHUNK-009",
+            "DOC-007-CHUNK-005",
+            "DOC-007-CHUNK-006"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 0.5,
+          "first_relevant_rank": 2
+        },
+        {
+          "question_id": "EVAL-014",
+          "question": "资产评估委托合同通常应当包括哪些内容？",
+          "expected_chunk_ids": [
+            "DOC-008-CHUNK-007"
+          ],
+          "returned_chunk_ids": [
+            "DOC-008-CHUNK-007",
+            "DOC-008-CHUNK-013",
+            "DOC-008-CHUNK-005"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        },
+        {
+          "question_id": "EVAL-015",
+          "question": "项目审核人员需要审核评估程序、评估报告和工作底稿吗？",
+          "expected_chunk_ids": [
+            "DOC-010-CHUNK-016"
+          ],
+          "returned_chunk_ids": [
+            "DOC-010-CHUNK-016",
+            "DOC-010-CHUNK-041",
+            "DOC-010-CHUNK-017"
+          ],
+          "hit": 1,
+          "recall": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_relevant_rank": 1
+        }
+      ]
+    }
+  ]
+}

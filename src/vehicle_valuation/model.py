@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal, Self
 from pydantic import (
@@ -34,7 +34,7 @@ class SubjectVehicle(BaseModel):
         if self.book_value_net_cny > self.book_value_original_cny:
             raise ValueError("账面净值不能大于账面原值")
         return self
-    
+
 
 class VehicleModelMapping(BaseModel):
     """表示一条可追溯的法定型号与市场车型映射证据。"""
@@ -75,6 +75,7 @@ class MarketListing(BaseModel):
     mileage_km: int = Field(ge=0)
     city: str = Field(min_length=1)
     price_cny: Decimal = Field(gt=0)
+    captured_at: datetime | None = None
 
 
 class MarketListingDetail(BaseModel):
@@ -346,3 +347,35 @@ class ValuationCalculationRequest(BaseModel):
             )
 
         return self
+
+
+class GroundedReportSection(BaseModel):
+    """保存基于RAG证据生成的报告章节。"""
+
+    section_title: str = Field(min_length=1)
+    content: str = Field(min_length=1)
+    cited_chunk_ids: list[str] = Field(min_length=1)
+
+
+class VehicleValuationReportDraft(BaseModel):
+    """保存准备写入DOCX的完整车辆评估初稿。"""
+
+    report_title: str = Field(min_length=1)
+    declaration: str = Field(min_length=1)
+    summary: str = Field(min_length=1)
+
+    client_and_users: str = Field(min_length=1)
+    valuation_purpose: str = Field(min_length=1)
+    object_and_scope: str = Field(min_length=1)
+    value_type: str = Field(min_length=1)
+    valuation_date: str = Field(min_length=1)
+    valuation_basis: str = Field(min_length=1)
+    valuation_method: str = Field(min_length=1)
+    valuation_process: str = Field(min_length=1)
+    assumptions: str = Field(min_length=1)
+    conclusion: str = Field(min_length=1)
+    special_matters: str = Field(min_length=1)
+    usage_restrictions: str = Field(min_length=1)
+
+    cited_chunk_ids: list[str]
+    missing_information: list[str] = []
