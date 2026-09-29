@@ -1,4 +1,15 @@
-from .model import ValuationRequest
+from pydantic import BaseModel, Field
+
+from .model import DrivingLicenseData, SubjectVehicle, ValuationRequest
+
+
+class MaterialConflict(BaseModel):
+    """跨来源资料冲突，供界面明确展示并阻断后续流程。"""
+
+    field_name: str
+    source_values: dict[str, str] = Field(min_length=2)
+    possible_ocr_error: bool = False
+    message: str
 
 
 def normalize_plate_number(value: str) -> str:
@@ -117,3 +128,92 @@ def run_initial_checks(
             issues.append(result)
 
     return issues
+
+
+def run_structured_checks(
+    request: ValuationRequest,
+) -> list[MaterialConflict]:
+    """逐字段比较 Excel、行驶证 OCR 确认值和现场核查值。"""
+
+    conflicts = run_license_subject_checks(
+        request.subject_vehicle,
+        request.driving_license,
+    )
+
+    if (
+        request.subject_vehicle.mileage_km
+        != request.inspection.actual_mileage_km
+    ):
+        conflicts.append(
+            MaterialConflict(
+                field_name="行驶里程",
+                source_values={
+                    "Excel": str(request.subject_vehicle.mileage_km),
+                    "现场核查": str(request.inspection.actual_mileage_km),
+                },
+                possible_ocr_error=False,
+                message="Excel 账载里程与现场核查里程不一致",
+            )
+        )
+
+    return conflicts
+
+
+def run_license_subject_checks(
+    subject_vehicle: SubjectVehicle,
+    driving_license: DrivingLicenseData,
+) -> list[MaterialConflict]:
+    """OCR 完成后立即比较 Excel 与行驶证，不等待现场核查提交。"""
+
+    conflicts: list[MaterialConflict] = []
+    excel_plate = normalize_plate_number(subject_vehicle.plate_number)
+    license_plate = normalize_plate_number(driving_license.plate_number)
+    if excel_plate != license_plate:
+        conflicts.append(MaterialConflict(
+            field_name="车牌号",
+            source_values={
+                "Excel": subject_vehicle.plate_number,
+                "行驶证/OCR": driving_license.plate_number,
+            },
+            possible_ocr_error=True,
+            message="Excel 与行驶证的车牌号不一致",
+        ))
+
+    excel_model = normalize_vehicle_model(subject_vehicle.vehicle_name)
+    license_model = normalize_vehicle_model(driving_license.vehicle_model)
+    if license_model not in excel_model:
+        conflicts.append(MaterialConflict(
+            field_name="车辆型号",
+            source_values={
+                "Excel": subject_vehicle.vehicle_name,
+                "行驶证/OCR": driving_license.vehicle_model,
+            },
+            possible_ocr_error=True,
+            message="Excel 与行驶证的车辆型号可能不一致",
+        ))
+
+    license_month = driving_license.registration_date.strftime("%Y-%m")
+    if subject_vehicle.in_service_date != license_month:
+        conflicts.append(MaterialConflict(
+            field_name="注册年月",
+            source_values={
+                "Excel": subject_vehicle.in_service_date,
+                "行驶证/OCR": license_month,
+            },
+            possible_ocr_error=True,
+            message="Excel 启用年月与行驶证注册年月不一致",
+        ))
+
+    if subject_vehicle.vin and (
+        subject_vehicle.vin.upper() != driving_license.vin.upper()
+    ):
+        conflicts.append(MaterialConflict(
+            field_name="VIN",
+            source_values={
+                "Excel": subject_vehicle.vin,
+                "行驶证/OCR": driving_license.vin,
+            },
+            possible_ocr_error=True,
+            message="Excel 与行驶证的 VIN 不一致",
+        ))
+    return conflicts

@@ -55,6 +55,11 @@ def load_subject_vehicles_from_excel(
             manufacturer=str(
                 worksheet.cell(row_number, 6).value
             ).strip(),
+            vin=(
+                str(worksheet.cell(row_number, 25).value).strip()
+                if worksheet.cell(row_number, 25).value
+                else None
+            ),
             unit=worksheet.cell(row_number, 7).value,
             quantity=worksheet.cell(row_number, 8).value,
             purchase_date=normalize_year_month(

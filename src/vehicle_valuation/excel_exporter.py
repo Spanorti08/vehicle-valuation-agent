@@ -2,6 +2,7 @@ from io import BytesIO
 import hashlib
 import re
 from datetime import date
+from decimal import Decimal
 
 from openpyxl import load_workbook
 from openpyxl.styles import (
@@ -142,6 +143,41 @@ def prepare_vehicle_export_workbook(
     sheet["W7"] = license_data.owner_name
     sheet["Y7"] = license_data.vin
     sheet["Z7"] = "=Q7/10000"
+
+    audit_fields = (
+        ("行驶证车牌", license_data.plate_number),
+        ("行驶证车型", license_data.vehicle_model),
+        ("VIN", license_data.vin),
+        ("注册日期", license_data.registration_date.isoformat()),
+        ("使用性质", license_data.use_character),
+        ("现场实际里程", request.inspection.actual_mileage_km),
+        ("外观等级", request.inspection.exterior_grade),
+        ("内饰等级", request.inspection.interior_grade),
+        ("硬件等级", request.inspection.hardware_grade),
+        ("现场核查日期", request.inspection.inspection_date.isoformat()),
+        ("评估基准日", request.valuation_date.isoformat()),
+    )
+    for row_number, (label, value) in enumerate(audit_fields, start=10):
+        sheet.cell(row=row_number, column=23).value = label
+        sheet.cell(row=row_number, column=24).value = value
+
+
+def rename_vehicle_information_sheet(workbook) -> None:
+    """把模板内部“车辆”页改为流程规定的“车辆信息”并修复公式引用。"""
+
+    if "车辆" not in workbook.sheetnames:
+        raise ValueError("Excel中缺少“车辆”sheet")
+    if "车辆信息" in workbook.sheetnames:
+        workbook.remove(workbook["车辆信息"])
+    workbook["车辆"].title = "车辆信息"
+    for sheet in workbook.worksheets:
+        for row in sheet.iter_rows():
+            for cell in row:
+                if isinstance(cell.value, str) and cell.value.startswith("="):
+                    cell.value = (
+                        cell.value.replace("'车辆'!", "'车辆信息'!")
+                        .replace("车辆!", "车辆信息!")
+                    )
 
 
 def write_calculation_sheet(
@@ -963,6 +999,7 @@ def build_case_sheets_excel(
     str,
     tuple[bytes, bytes],
 ],
+    expected_final_value: Decimal | None = None,
 ) -> bytes:
     """生成案例sheet和计算表，并返回新的Excel文件内容。"""
 
@@ -1122,9 +1159,16 @@ def build_case_sheets_excel(
         rules=rules,
     )
 
+    if expected_final_value is not None:
+        calculation_sheet = workbook["计算表"]
+        calculation_sheet["AA1"] = "Python复核评估值"
+        calculation_sheet["AA2"] = float(expected_final_value)
+
     vehicle_sheet = workbook["车辆"]
     vehicle_sheet["R7"] = f"='计算表'!{final_value_cell}"
     vehicle_sheet["T7"] = f"='计算表'!{final_value_cell}"
+
+    rename_vehicle_information_sheet(workbook)
 
     workbook.calculation.fullCalcOnLoad = True
     workbook.calculation.forceFullCalc = True

@@ -26,6 +26,9 @@ venv/
 outputs/
 tmp/
 
+# Agent本地执行日志（可能包含运行错误和业务过程信息）
+logs/agent/
+
 # 真实或敏感参考资料
 data/private/
 references/private/
@@ -33,4 +36,3 @@ references/private/
 # 本地RAG原始资料
 data/rag/raw/
 data/rag/processed/
-

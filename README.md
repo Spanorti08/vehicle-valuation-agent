@@ -1,6 +1,6 @@
 # Vehicle Valuation Agent
 
-一个面向车辆市场法评估流程的 **Human-in-the-loop AI / RAG 工作流助手**。
+一个面向车辆市场法评估流程的 **Human-in-the-loop Tool-calling Agent / AI / RAG 工作流助手**。
 
 项目从车辆评估明细表、行驶证照片和现场核查信息出发，完成资料核对、市场车型映射、二手车案例检索、案例差异修正、市场法测算，并生成可下载的 Excel 计算底稿与 Word 评估报告初稿。
 
@@ -12,6 +12,7 @@
 - [核心能力](#核心能力)
 - [项目展示](#项目展示)
 - [系统工作流](#系统工作流)
+- [Controlled Tool-calling Agent V1](#controlled-tool-calling-agent-v1)
 - [技术架构](#技术架构)
 - [AI、RAG 与确定性计算的边界](#airag-与确定性计算的边界)
 - [市场法计算逻辑](#市场法计算逻辑)
@@ -69,8 +70,10 @@
 - 根据法定型号检索本地公开车型映射资料；
 - 推荐二手车市场常用车系和搜索关键词；
 - 允许用户修改推荐关键词；
+- 由受控 Tool-calling Agent 规划首次搜索、扩大城市、失败重试和停止；
+- Planner 只能选择 Policy 当前允许的白名单工具；
 - 使用 Playwright 抓取公开二手车列表页和详情页；
-- 根据车型关键词、上牌年份和里程计算相似度；
+- 由 Python 按车型、年份、里程、字段完整性、页面有效性、重复、价格和地区进行质量评分；
 - 默认展示 Top 3，可继续添加更多案例；
 - 保存车源链接、公开信息和案例页面截图。
 
@@ -162,11 +165,13 @@ flowchart TD
     G --> H[Excel / 行驶证 / 现场资料核对]
     H --> I[车型映射检索]
     I --> J[用户确认市场车型关键词]
-    J --> K[多城市二手车案例抓取]
-    K --> L[相似度排序与 Top 3 推荐]
-    L --> M[用户确认 3+ 个案例]
-    M --> N[抓取详情与案例截图]
-    N --> O[LLM 生成主观因素建议]
+    J --> K[Agent Planner 选择白名单工具]
+    K --> L[搜索 / 质量评分 / 扩城 / 条件调整 / 重试]
+    L --> K
+    L --> N[同次读取价格 / 详情 / 截图]
+    N --> M[达到目标后暂停]
+    M --> M0[用户确认 3+ 个案例]
+    M0 --> O[LLM 生成主观因素建议]
     O --> P[规则约束与人工可编辑确认]
     P --> Q[Python 计算客观指数与修正价格]
     Q --> R[生成 Excel 底稿]
@@ -175,6 +180,22 @@ flowchart TD
     T --> U[Python 组装脱敏 Word 模板]
     U --> V[下载 Word 初稿]
 ```
+
+## Controlled Tool-calling Agent V1
+
+项目只在市场案例搜索环节使用受控 Tool-calling Agent。资料核对、参数确认、公式计算、RAG 报告和文件导出仍由确定性工作流与人工确认控制。市场搜索 Agent 负责搜索、扩城、去重、重试和安全停止；Planner 只能从 Policy 当前允许的白名单工具中选择下一步。
+
+```text
+MarketAgentState → Planner → Policy / allowed_tools
+                           → 市场搜索工具
+                           → 更新状态 → Human Approval Gate
+```
+
+LLM 只提出结构化动作，不能传入任意网址、运行 Shell、自动采用案例或决定估值。Policy 用确定性规则生成当前允许的工具；模型越权时会被拒绝并替换为安全动作。Ollama 不可用或输出不合法时，系统降级到确定性 Planner。
+
+市场搜索 Agent 找到足够候选案例后暂停，由用户选择并确认最终采用的案例。后续调整参数和最终文件仍需人工复核，金额始终由 Python 公式计算。详见 [`docs/agent_v1.md`](docs/agent_v1.md)。
+
+市场搜索执行轨迹默认写入本地 `logs/agent/`。日志目录已加入 `.gitignore`，并对本机路径、VIN 和常见车牌格式做基础脱敏。
 
 ## 技术架构
 
@@ -187,6 +208,7 @@ flowchart TD
 | 网页自动化 | Playwright | 动态页面抓取与截图 |
 | HTML 解析 | Beautiful Soup | 从列表页和详情页提取公开字段 |
 | 本地 LLM | Ollama + `qwen3:8b` | 结构化调整建议、RAG 章节生成 |
+| Agent | Pydantic + Policy + Tool Registry | 受控规划、扩城重试、人工审批与执行轨迹 |
 | Embedding | Ollama + `bge-m3` | 将查询与知识片段转换为 1024 维向量 |
 | 关键词检索 | jieba + rank-bm25 | 中文分词与 BM25 召回 |
 | 向量检索 | FAISS `IndexFlatIP` | 对归一化向量进行余弦相似度检索 |
@@ -328,7 +350,7 @@ BM25 = 0.75
 FAISS = 1.0
 ```
 
-但独立测试中单独 FAISS 表现更好，因此生产服务默认使用 `faiss`，同时保留 `weighted_hybrid` 作为可评估、可切换的候选方案。这个结论来自实验，而不是预设“Hybrid 一定更好”。
+当前流程按方案固定使用 `weighted_hybrid`；独立评测中单独 FAISS 曾表现更好，因此两者的差异会保留在评测记录中，而不是把 Hybrid 描述为必然更优。
 
 ### 6. 元数据过滤
 
@@ -372,6 +394,7 @@ vehicle-valuation-agent/
 │   │   └── processed/                  # chunks / FAISS 索引，默认不提交 Git
 │   └── synthetic/                      # 合成测试数据
 ├── docs/
+│   ├── agent_v1.md                     # Agent V1 设计与安全边界
 │   └── rag_evaluation.md               # RAG 实验说明
 ├── scripts/
 │   └── evaluate_rag.py                 # 检索评估脚本
@@ -385,6 +408,7 @@ vehicle-valuation-agent/
 │   ├── license_parser.py               # 行驶证字段解析
 │   ├── checks.py                       # 跨来源一致性检查
 │   ├── market_scraper.py               # 市场页面抓取、解析、截图
+│   ├── market_agent.py                 # Planner、Policy、工具执行器与轨迹
 │   ├── model_mapping_retrieval.py       # 车型映射检索
 │   ├── market_route_retrieval.py       # 搜索路由匹配
 │   ├── adjustment_ai.py                # AI 调整建议
@@ -511,7 +535,7 @@ http://localhost:8501
 8. 填写现场核查日期、实际里程、外观、内饰、硬件等级和车辆能否正常启动/行驶；
 9. 点击“确认现场核查并核对资料”；
 10. 核对系统推荐的市场车系和交易车型关键词；
-11. 点击“搜索市场案例”；
+11. 点击“启动案例搜索 Agent”，由 Agent 自动扩展允许城市并在案例达标后暂停；
 12. 从相似度排序结果中选择至少 3 个案例，需要时点击添加更多；
 13. 点击“确认采用的市场案例”；
 14. 系统读取案例详情并截图；
@@ -611,12 +635,6 @@ python -c "from pathlib import Path; from vehicle_valuation.rag_retriever import
 python -m pytest -q
 ```
 
-当前仓库预期：
-
-```text
-29 passed
-```
-
 测试覆盖：
 
 - Pydantic 领域模型；
@@ -628,6 +646,7 @@ python -m pytest -q
 - Word 模板替换与空编号清理；
 - Excel / Word 导出残留校验；
 - RAG 指标计算与数据集格式。
+- Agent 自动扩城、失败重试、越权拦截、人工审批、最大步数和 URL 去重。
 
 ### F. 复现 RAG 评估
 
@@ -842,12 +861,11 @@ tmp/
 - 对 BM25、FAISS、Hybrid 和可选 reranker 做统一离线评估；
 - 给每个准则文档保存更精确的原始下载 URL 和版本日期。
 
-### P2：Agent 工作流
+### P2：市场搜索 Agent
 
-- 将“案例不足 → 扩大城市 → 切换来源 → 再排序”封装为有状态工具调用；
-- 设置最大尝试次数、超时和人工接管点；
-- 记录每一步输入、输出、证据和失败原因；
-- 保持所有外部操作可观察、可中断、可审计。
+- 已完成市场案例搜索 Agent、白名单 Tool Calling、最大步骤数、有限重试和案例人工确认门；
+- 下一版可增加第二个合规市场来源，以及跨来源失败后的动态路由；
+- 已完成 Python 案例质量评分、关键词调整、年份与里程范围调整工具。
 
 ### P3：部署
 

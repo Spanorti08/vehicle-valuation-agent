@@ -18,6 +18,7 @@ class SubjectVehicle(BaseModel):
     plate_number: str = Field(min_length=1)
     vehicle_name: str = Field(min_length=1)
     manufacturer: str = Field(min_length=1)
+    vin: str | None = None
 
     unit: Literal["辆"]
     quantity: int = Field(gt=0)

@@ -7,6 +7,8 @@ from vehicle_valuation.checks import (
     check_vehicle_model,
     check_registration_month,
     run_initial_checks,
+    run_license_subject_checks,
+    run_structured_checks,
 )
 from vehicle_valuation.loaders import (
     load_synthetic_valuation_request,
@@ -122,3 +124,45 @@ def test_initial_checks_return_multiple_issues() -> None:
     issues = run_initial_checks(request)
 
     assert len(issues) == 2
+
+
+def test_structured_checks_show_sources_and_ocr_risk() -> None:
+    request = load_synthetic_valuation_request(
+        DATA_DIR,
+        "2026-06-30",
+    )
+    request.driving_license.plate_number = "豫A·DIFF1"
+
+    conflicts = run_structured_checks(request)
+
+    plate_conflict = next(
+        item for item in conflicts if item.field_name == "车牌号"
+    )
+    assert set(plate_conflict.source_values) == {"Excel", "行驶证/OCR"}
+    assert plate_conflict.possible_ocr_error is True
+
+
+def test_structured_checks_compare_inspection_mileage() -> None:
+    request = load_synthetic_valuation_request(
+        DATA_DIR,
+        "2026-06-30",
+    )
+    request.inspection.actual_mileage_km += 1
+
+    conflicts = run_structured_checks(request)
+
+    assert any(item.field_name == "行驶里程" for item in conflicts)
+
+
+def test_license_subject_checks_can_run_immediately_after_ocr() -> None:
+    request = load_synthetic_valuation_request(
+        DATA_DIR,
+        "2026-06-30",
+    )
+
+    conflicts = run_license_subject_checks(
+        request.subject_vehicle,
+        request.driving_license,
+    )
+
+    assert conflicts == []
