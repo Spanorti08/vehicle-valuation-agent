@@ -91,6 +91,15 @@ from vehicle_valuation.case_selection import (
 from vehicle_valuation.adjustment_review import (
     evaluate_adjustment_review,
 )
+from vehicle_valuation.ui_workspace import (
+    inject_workspace_css,
+    render_market_case_cards,
+    render_section_header,
+    render_subsection,
+    render_valuation_dashboard,
+    render_vehicle_summary,
+    render_workspace_shell,
+)
 
 
 MODEL_MAPPING_PATH = (
@@ -114,9 +123,12 @@ MARKET_SELECTION_POLICY_VERSION = "3-langgraph"
 st.set_page_config(
     page_title="车辆评估助手",
     page_icon="🚗",
+    layout="wide",
+    initial_sidebar_state="expanded",
 )
 
-st.title("车辆评估助手")
+inject_workspace_css()
+render_workspace_shell(st.session_state)
 
 
 DOWNSTREAM_STATE_KEYS = [
@@ -239,9 +251,17 @@ def build_driving_license_from_widgets() -> DrivingLicenseData:
         issue_date=st.session_state.get("license_issue_date"),
     )
 
+render_section_header(
+    "stage-vehicle",
+    "01",
+    "车辆资料",
+    "上传基础资料后自动识别和核对；只有无法安全处理的异常才显示编辑项。",
+)
+
 uploaded_file = st.file_uploader(
-    "上传车辆评估明细表",
+    "拖入车辆评估明细表",
     type=["xlsx"],
+    help="工作簿需包含车辆 Sheet。文件只在当前本地流程中处理。",
 )
 
 if uploaded_file is not None:
@@ -255,27 +275,34 @@ if uploaded_file is not None:
 
     st.success(f"成功读取 {len(vehicles)} 辆车")
 
-    selected_vehicle = st.selectbox(
-        "选择待评估车辆",
-        options=vehicles,
-        format_func=lambda vehicle: (
-            f"{vehicle.asset_id} - "
-            f"{vehicle.plate_number} - "
-            f"{vehicle.vehicle_name}"
-        ),
-    )
-
-    valuation_date = st.date_input(
-        "评估基准日",
-        value=None,
-        format="YYYY/MM/DD",
-    )
+    vehicle_column, date_column = st.columns([2, 1])
+    with vehicle_column:
+        selected_vehicle = st.selectbox(
+            "选择待评估车辆",
+            options=vehicles,
+            format_func=lambda vehicle: (
+                f"{vehicle.asset_id} - "
+                f"{vehicle.plate_number} - "
+                f"{vehicle.vehicle_name}"
+            ),
+        )
+    with date_column:
+        valuation_date = st.date_input(
+            "评估基准日",
+            value=None,
+            format="YYYY/MM/DD",
+        )
+    st.session_state["ui_selected_vehicle"] = selected_vehicle
+    render_vehicle_summary(selected_vehicle, valuation_date)
 
     if valuation_date is None:
         st.info("请选择评估基准日")
         st.stop()
 
-    st.subheader("行驶证")
+    render_subsection(
+        "行驶证识别",
+        "上传后立即自动 OCR、校准并与 Excel 对比，无异常时无需操作。",
+    )
 
     driving_license_image = st.file_uploader(
         "上传行驶证照片",
@@ -440,19 +467,24 @@ if uploaded_file is not None:
                     st.error(f"请检查行驶证信息：{error}")
 
         if "confirmed_license" in st.session_state:
-            st.subheader("现场核查")
-
-            inspection_date = st.date_input(
-                "核查日期",
-                key="inspection_date",
+            render_subsection(
+                "现场核查",
+                "补充实时里程和车况信息，作为案例搜索和差异修正的依据。",
             )
 
-            actual_mileage_km = st.number_input(
-                "现场里程（公里）",
-                min_value=0,
-                value=selected_vehicle.mileage_km,
-                step=100,
-            )
+            inspection_date_column, mileage_column = st.columns(2)
+            with inspection_date_column:
+                inspection_date = st.date_input(
+                    "核查日期",
+                    key="inspection_date",
+                )
+            with mileage_column:
+                actual_mileage_km = st.number_input(
+                    "现场里程（公里）",
+                    min_value=0,
+                    value=selected_vehicle.mileage_km,
+                    step=100,
+                )
 
             condition_options = [
                 "差",
@@ -462,39 +494,47 @@ if uploaded_file is not None:
                 "好",
             ]
 
-            exterior_grade = st.selectbox(
-                "外观状况",
-                options=condition_options,
-                index=2,
-            )
+            exterior_column, interior_column, hardware_column = st.columns(3)
+            with exterior_column:
+                exterior_grade = st.selectbox(
+                    "外观状况",
+                    options=condition_options,
+                    index=2,
+                )
+            with interior_column:
+                interior_grade = st.selectbox(
+                    "内饰状况",
+                    options=condition_options,
+                    index=2,
+                )
+            with hardware_column:
+                hardware_grade = st.selectbox(
+                    "硬件状况",
+                    options=condition_options,
+                    index=2,
+                )
 
-            interior_grade = st.selectbox(
-                "内饰状况",
-                options=condition_options,
-                index=2,
-            )
-
-            hardware_grade = st.selectbox(
-                "硬件状况",
-                options=condition_options,
-                index=2,
-            )
-
-            can_start = st.checkbox(
-                "车辆可以正常启动",
-                value=True,
-            )
-
-            can_drive = st.checkbox(
-                "车辆可以正常行驶",
-                value=True,
-            )
+            start_column, drive_column = st.columns(2)
+            with start_column:
+                can_start = st.checkbox(
+                    "车辆可以正常启动",
+                    value=True,
+                )
+            with drive_column:
+                can_drive = st.checkbox(
+                    "车辆可以正常行驶",
+                    value=True,
+                )
 
             inspection_notes = st.text_area(
                 "现场核查备注",
             )
 
-            if st.button("确认现场核查并核对资料"):
+            if st.button(
+                "确认现场核查并核对资料",
+                type="primary",
+                use_container_width=True,
+            ):
                 try:
                     clear_downstream_state()
 
@@ -563,7 +603,12 @@ if uploaded_file is not None:
                 "initial_checks_passed",
                 False,
             ):
-                st.subheader("市场车型推荐")
+                render_section_header(
+                    "stage-market",
+                    "02",
+                    "市场案例",
+                    "系统自动映射市场车型、搜索车源并采用达到硬门槛的 Top 3。",
+                )
 
                 legal_model = extract_legal_model(
                     st.session_state[
@@ -1125,7 +1170,20 @@ if uploaded_file is not None:
                                         )
 
                     if "market_case_details" in st.session_state:
-                        st.subheader("市场案例详情")
+                        render_market_case_cards(
+                            st.session_state["confirmed_market_cases"],
+                            quality_by_url,
+                        )
+                        render_section_header(
+                            "stage-adjustment",
+                            "03",
+                            "调整参数",
+                            "AI 只提出有证据的方向和档位差；规则校验与公式计算由 Python 完成。",
+                        )
+                        render_subsection(
+                            "案例公开详情",
+                            "详细证据默认收起，需要审计时再展开查看。",
+                        )
 
                         detail_rows = []
 
@@ -1147,11 +1205,15 @@ if uploaded_file is not None:
                                 }
                             )
 
-                        st.dataframe(
-                            detail_rows,
-                            use_container_width=True,
-                            hide_index=True,
-                        )
+                        with st.expander(
+                            "查看市场案例详情",
+                            expanded=False,
+                        ):
+                            st.dataframe(
+                                detail_rows,
+                                use_container_width=True,
+                                hide_index=True,
+                            )
 
                         if (
                             "ai_comparison_suggestions"
@@ -1502,6 +1564,12 @@ if uploaded_file is not None:
                                 )
                             )
 
+                            render_valuation_dashboard(
+                                final_value,
+                                confirmed_cases,
+                                adjusted_prices,
+                            )
+
                             with st.expander(
                                 "比较因素修正系数表",
                                 expanded=True,
@@ -1511,11 +1579,6 @@ if uploaded_file is not None:
                                     use_container_width=True,
                                     hide_index=True,
                                 )
-
-                            st.metric(
-                                "车辆评估建议值",
-                                f"{final_value:,.0f} 元",
-                            )
 
                             st.session_state[
                                 "adjusted_market_prices"
@@ -1541,12 +1604,20 @@ if uploaded_file is not None:
                                     "已自动进入确定性计算。"
                                 )
 
+                            render_section_header(
+                                "stage-report",
+                                "05",
+                                "报告输出",
+                                "生成可追溯的 Excel 底稿和 Word 初稿，并执行跨文件一致性检查。",
+                            )
+
                             if st.button(
                                 "生成Excel结果",
                                 disabled=not st.session_state.get(
                                     "adjustments_approved",
                                     False,
                                 ),
+                                use_container_width=True,
                             ):
                                 try:
                                     case_screenshots = (
@@ -1599,6 +1670,8 @@ if uploaded_file is not None:
                                     "adjustments_approved",
                                     False,
                                 ),
+                                type="primary",
+                                use_container_width=True,
                             ):
                                 try:
                                     with st.spinner(
