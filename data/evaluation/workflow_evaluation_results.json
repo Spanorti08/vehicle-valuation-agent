@@ -1,0 +1,207 @@
+{
+  "generated_at": "2026-09-30T07:56:41.413697+00:00",
+  "benchmark_type": "offline_synthetic_and_stored_independent_test",
+  "document_intake": {
+    "scope": "OCR后字段校准与异常分流，不是原始图片OCR准确率",
+    "scenario_count": 8,
+    "auto_resolvable_case_count": 5,
+    "auto_resolvable_critical_field_accuracy": 1.0,
+    "auto_correction_success_rate": 1.0,
+    "manual_routing_accuracy": 1.0,
+    "scenario_mix_auto_pass_rate": 0.625,
+    "records": [
+      {
+        "scenario_id": "exact_match",
+        "expected_manual": false,
+        "actual_manual": false,
+        "schema_valid": true,
+        "critical_fields_correct": true,
+        "correction_rules": [],
+        "review_reasons": [],
+        "conflicts": []
+      },
+      {
+        "scenario_id": "brand_suffix_and_model_punctuation",
+        "expected_manual": false,
+        "actual_manual": false,
+        "schema_valid": true,
+        "critical_fields_correct": true,
+        "correction_rules": [
+          "reference_backed_vehicle_model_normalization"
+        ],
+        "review_reasons": [],
+        "conflicts": []
+      },
+      {
+        "scenario_id": "plate_letter_digit_confusion",
+        "expected_manual": false,
+        "actual_manual": false,
+        "schema_valid": true,
+        "critical_fields_correct": true,
+        "correction_rules": [
+          "reference_backed_identifier_ocr_correction"
+        ],
+        "review_reasons": [],
+        "conflicts": []
+      },
+      {
+        "scenario_id": "vin_letter_digit_confusion",
+        "expected_manual": false,
+        "actual_manual": false,
+        "schema_valid": true,
+        "critical_fields_correct": true,
+        "correction_rules": [
+          "reference_backed_identifier_ocr_correction"
+        ],
+        "review_reasons": [],
+        "conflicts": []
+      },
+      {
+        "scenario_id": "low_confidence_but_reference_matches",
+        "expected_manual": false,
+        "actual_manual": false,
+        "schema_valid": true,
+        "critical_fields_correct": true,
+        "correction_rules": [],
+        "review_reasons": [],
+        "conflicts": []
+      },
+      {
+        "scenario_id": "missing_required_engine_number",
+        "expected_manual": true,
+        "actual_manual": true,
+        "schema_valid": false,
+        "critical_fields_correct": true,
+        "correction_rules": [],
+        "review_reasons": [
+          "engine_number未识别"
+        ],
+        "conflicts": []
+      },
+      {
+        "scenario_id": "material_plate_conflict",
+        "expected_manual": true,
+        "actual_manual": true,
+        "schema_valid": true,
+        "critical_fields_correct": false,
+        "correction_rules": [],
+        "review_reasons": [],
+        "conflicts": [
+          "Excel 与行驶证的车牌号不一致"
+        ]
+      },
+      {
+        "scenario_id": "low_confidence_registration_conflict",
+        "expected_manual": true,
+        "actual_manual": true,
+        "schema_valid": true,
+        "critical_fields_correct": false,
+        "correction_rules": [],
+        "review_reasons": [
+          "registration_date OCR置信度55%低于70%"
+        ],
+        "conflicts": [
+          "Excel 启用年月与行驶证注册年月不一致"
+        ]
+      }
+    ]
+  },
+  "market_agent": {
+    "scope": "离线合成搜索后端；评测图路由、预算、门槛和自动选择策略",
+    "scenario_count": 5,
+    "solvable_scenario_count": 3,
+    "solvable_search_success_rate": 1.0,
+    "expected_outcome_accuracy": 1.0,
+    "automatic_top3_ready_rate": 1.0,
+    "average_search_rounds_successful": 1.67,
+    "below_similarity_floor_block_rate": 1.0,
+    "minimum_similarity_score": 60,
+    "records": [
+      {
+        "scenario_id": "initial_batch_succeeds",
+        "expected_success": true,
+        "status": "candidates_ready",
+        "search_rounds": 1,
+        "qualified_cases": 3,
+        "automatic_top3_approved": true,
+        "rejected_cases": 0
+      },
+      {
+        "scenario_id": "expand_city_then_succeed",
+        "expected_success": true,
+        "status": "candidates_ready",
+        "search_rounds": 2,
+        "qualified_cases": 3,
+        "automatic_top3_approved": true,
+        "rejected_cases": 0
+      },
+      {
+        "scenario_id": "retry_then_succeed",
+        "expected_success": true,
+        "status": "candidates_ready",
+        "search_rounds": 2,
+        "qualified_cases": 3,
+        "automatic_top3_approved": true,
+        "rejected_cases": 0
+      },
+      {
+        "scenario_id": "insufficient_cases_pause",
+        "expected_success": false,
+        "status": "awaiting_human_input",
+        "search_rounds": 1,
+        "qualified_cases": 1,
+        "automatic_top3_approved": false,
+        "rejected_cases": 0
+      },
+      {
+        "scenario_id": "below_similarity_floor_pause",
+        "expected_success": false,
+        "status": "awaiting_human_input",
+        "search_rounds": 1,
+        "qualified_cases": 0,
+        "automatic_top3_approved": false,
+        "rejected_cases": 3
+      }
+    ]
+  },
+  "rag_retrieval": {
+    "scope": "已有独立测试集检索结果；10题调参、5题测试",
+    "source_file": "data/rag/evaluation_results.json",
+    "question_count": 15,
+    "tuning_question_count": 10,
+    "test_question_count": 5,
+    "selected_weights": {
+      "bm25_weight": 0.75,
+      "vector_weight": 1.0
+    },
+    "test_results": [
+      {
+        "retriever": "bm25",
+        "question_count": 5,
+        "hit_rate_at_3": 0.6,
+        "mean_recall_at_3": 0.6,
+        "mrr_at_3": 0.6
+      },
+      {
+        "retriever": "faiss",
+        "question_count": 5,
+        "hit_rate_at_3": 1.0,
+        "mean_recall_at_3": 1.0,
+        "mrr_at_3": 0.8666666666666668
+      },
+      {
+        "retriever": "weighted_hybrid_rrf",
+        "question_count": 5,
+        "hit_rate_at_3": 0.8,
+        "mean_recall_at_3": 0.8,
+        "mrr_at_3": 0.7
+      }
+    ]
+  },
+  "limitations": [
+    "字段校准样本是人工构造的常见错误，不代表真实图片OCR准确率。",
+    "市场搜索使用离线合成后端，不代表公开网站实时可用率。",
+    "自动通过率取决于本评测中的正常/异常样本比例，不外推生产数据。",
+    "RAG数字来自仓库内固定的5题独立测试集，样本量仍然较小。"
+  ]
+}

@@ -7,6 +7,7 @@ from vehicle_valuation.checks import (
 )
 from vehicle_valuation.model import (
     DrivingLicenseData,
+    MarketListing,
     ValuationRequest,
     VehicleInspection,
 )
@@ -107,6 +108,9 @@ MARKET_ROUTE_PATH = (
     / "market_search_routes.json"
 )
 
+OCR_PIPELINE_VERSION = "3"
+MARKET_SELECTION_POLICY_VERSION = "3-langgraph"
+
 st.set_page_config(
     page_title="车辆评估助手",
     page_icon="🚗",
@@ -133,6 +137,7 @@ DOWNSTREAM_STATE_KEYS = [
     "market_cases_auto_selected",
     "automatic_case_selection",
     "adjustment_review_decision",
+    "market_agent_instance",
 ]
 
 LICENSE_WIDGET_KEYS = {
@@ -151,7 +156,54 @@ def clear_downstream_state() -> None:
     """输入或案例变化后清除旧计算和旧下载文件。"""
 
     for state_key in DOWNSTREAM_STATE_KEYS:
-        st.session_state.pop(state_key, None)
+        value = st.session_state.pop(state_key, None)
+        if state_key == "market_agent_instance" and value is not None:
+            value.close()
+
+
+def apply_automatic_market_selection(
+    market_agent: ControlledMarketAgent,
+    agent_state,
+) -> bool:
+    """达到硬门槛时自动采用 Top 3，并保存同次抓取证据。"""
+
+    automatic_selection = evaluate_automatic_case_selection(
+        listings=agent_state.candidates,
+        assessments=agent_state.quality_assessments,
+        details=agent_state.preview_details,
+        screenshots=agent_state.preview_screenshots,
+        minimum_similarity_score=60,
+    )
+    st.session_state["automatic_case_selection"] = automatic_selection
+    if not automatic_selection.approved:
+        return False
+
+    selected_url_set = set(automatic_selection.selected_urls)
+    automatic_cases = [
+        item
+        for item in agent_state.candidates
+        if str(item.source_url) in selected_url_set
+    ]
+    detail_by_url = {
+        str(item.source_url): item
+        for item in agent_state.preview_details
+    }
+    market_agent.complete_candidate_selection(
+        agent_state,
+        "automatic_policy",
+    )
+    st.session_state["confirmed_market_cases"] = automatic_cases
+    st.session_state["market_case_details"] = [
+        detail_by_url[str(item.source_url)]
+        for item in automatic_cases
+    ]
+    st.session_state["market_case_screenshots"] = {
+        url: images
+        for url, images in agent_state.preview_screenshots.items()
+        if url in selected_url_set
+    }
+    st.session_state["market_cases_auto_selected"] = True
+    return True
 
 
 def populate_license_widget_state(
@@ -242,6 +294,8 @@ if uploaded_file is not None:
             hashlib.sha256(image_bytes).hexdigest()
             + ":"
             + selected_vehicle.asset_id
+            + ":"
+            + OCR_PIPELINE_VERSION
         )
         if st.session_state.get("license_processing_key") != processing_key:
             for state_key in (
@@ -251,6 +305,7 @@ if uploaded_file is not None:
                 "license_calibration",
                 "license_precheck_conflicts",
                 "license_auto_accepted",
+                "show_license_editor",
             ):
                 st.session_state.pop(state_key, None)
             clear_downstream_state()
@@ -295,33 +350,26 @@ if uploaded_file is not None:
                 st.error(f"行驶证自动识别失败：{error}")
 
         calibration = st.session_state.get("license_calibration")
-        if calibration is not None:
-            if calibration.corrections:
-                for correction in calibration.corrections:
-                    st.info(
-                        f"已自动校准{correction.field_name}："
-                        f"“{correction.raw_value}” → "
-                        f"“{correction.calibrated_value}”\n\n"
-                        f"依据：{correction.evidence}"
-                    )
-            if st.session_state.get("license_auto_accepted", False):
-                st.success(
-                    "OCR、字段校准和 Pydantic 校验均通过，"
-                    "已自动进入现场核查。"
-                )
-            elif calibration.requires_review:
-                st.warning(
-                    "以下异常需要人工处理："
-                    + "；".join(calibration.review_reasons)
-                )
         precheck_conflicts = st.session_state.get(
             "license_precheck_conflicts",
             [],
         )
+        if calibration is not None and calibration.corrections:
+            correction_summary = "；".join(
+                f"{item.raw_value}→{item.calibrated_value}"
+                for item in calibration.corrections
+            )
+            st.info(f"已自动校准：{correction_summary}")
+        if st.session_state.get("license_auto_accepted", False):
+            st.success("行驶证已与 Excel 自动核对通过。")
+        elif calibration is not None and calibration.requires_review:
+            st.warning(
+                "需要人工处理："
+                + "；".join(calibration.review_reasons)
+            )
         if precheck_conflicts:
             st.warning(
-                "OCR 已完成，但 Excel 与行驶证存在冲突，"
-                "因此没有自动放行："
+                "Excel 与行驶证存在冲突，需要人工处理："
             )
             for conflict in precheck_conflicts:
                 st.write(
@@ -329,13 +377,24 @@ if uploaded_file is not None:
                     f"来源值={conflict.source_values}"
                 )
 
-        with st.expander(
-            "查看或修改行驶证识别结果",
-            expanded=not st.session_state.get("license_auto_accepted", False),
-        ):
+        needs_license_intervention = (
+            calibration is None
+            or calibration.requires_review
+            or bool(precheck_conflicts)
+        )
+        show_license_editor = needs_license_intervention
+        if not needs_license_intervention:
+            show_license_editor = st.toggle(
+                "手动修改行驶证识别结果",
+                key="show_license_editor",
+            )
+
+        if show_license_editor:
             st.caption(
-                "保留 OCR 原文、字段置信度和自动校准记录；"
-                "高风险字段不会进行无依据的模糊修正。"
+                "仅在自动核对异常或你主动修改时显示以下字段。"
+            )
+            st.caption(
+                "系统仍会保留 OCR 原文、置信度和校准记录。"
             )
             st.text_input("车辆牌号", key="license_plate_number")
             st.text_input("所有人", key="license_owner_name")
@@ -355,21 +414,6 @@ if uploaded_file is not None:
                 value=None,
                 key="license_issue_date",
             )
-            if calibration is not None:
-                confidence_rows = [
-                    {
-                        "字段": field_name,
-                        "OCR置信度": confidence,
-                    }
-                    for field_name, confidence in (
-                        calibration.field_confidences.items()
-                    )
-                ]
-                st.dataframe(
-                    confidence_rows,
-                    use_container_width=True,
-                    hide_index=True,
-                )
             if st.button("保存人工修改并继续"):
                 try:
                     corrected_license = build_driving_license_from_widgets()
@@ -595,7 +639,7 @@ if uploaded_file is not None:
                             "默认条件：目标年份取行驶证注册年份，目标里程取现场里程；"
                             "先搜索北京、上海，再自动扩展广州、深圳；"
                             "最多8轮；质量分及年份/里程匹配分均不得低于60分，"
-                            "自动采用门槛85分。"
+                            "完整合格案例达到3个后自动采用相似度最高的Top 3。"
                         )
                         search_signature_source = (
                             st.session_state[
@@ -603,6 +647,7 @@ if uploaded_file is not None:
                             ].model_dump_json()
                             + market_keyword
                             + market_route.series_path
+                            + MARKET_SELECTION_POLICY_VERSION
                         )
                         automatic_search_key = hashlib.sha256(
                             search_signature_source.encode("utf-8")
@@ -644,7 +689,13 @@ if uploaded_file is not None:
                                     ),
                                     case_evaluator=SnapshotMarketCaseEvaluator(),
                                     log_dir=Path("logs/agent"),
+                                    checkpoint_path=Path(
+                                        "logs/agent/market_graph_checkpoints.sqlite"
+                                    ),
                                 )
+                                st.session_state[
+                                    "market_agent_instance"
+                                ] = market_agent
                                 agent_state = market_agent.initialize_state(
                                     market_keyword=market_keyword,
                                     series_path=(
@@ -665,68 +716,12 @@ if uploaded_file is not None:
 
                                 if (
                                     agent_state.status
-                                    == "awaiting_human_approval"
+                                    == "candidates_ready"
                                 ):
-                                    automatic_selection = (
-                                        evaluate_automatic_case_selection(
-                                            listings=agent_state.candidates,
-                                            assessments=(
-                                                agent_state.quality_assessments
-                                            ),
-                                            details=agent_state.preview_details,
-                                            screenshots=(
-                                                agent_state.preview_screenshots
-                                            ),
-                                            minimum_score=max(
-                                                85,
-                                                int(minimum_quality_score),
-                                            ),
-                                        )
+                                    apply_automatic_market_selection(
+                                        market_agent,
+                                        agent_state,
                                     )
-                                    st.session_state[
-                                        "automatic_case_selection"
-                                    ] = automatic_selection
-                                    if automatic_selection.approved:
-                                        selected_url_set = set(
-                                            automatic_selection.selected_urls
-                                        )
-                                        automatic_cases = [
-                                            item
-                                            for item in agent_state.candidates
-                                            if str(item.source_url)
-                                            in selected_url_set
-                                        ]
-                                        detail_by_url = {
-                                            str(item.source_url): item
-                                            for item in agent_state.preview_details
-                                        }
-                                        market_agent.complete_candidate_selection(
-                                            agent_state,
-                                            "automatic_policy",
-                                        )
-                                        st.session_state[
-                                            "confirmed_market_cases"
-                                        ] = automatic_cases
-                                        st.session_state[
-                                            "market_case_details"
-                                        ] = [
-                                            detail_by_url[
-                                                str(item.source_url)
-                                            ]
-                                            for item in automatic_cases
-                                        ]
-                                        st.session_state[
-                                            "market_case_screenshots"
-                                        ] = {
-                                            url: images
-                                            for url, images in (
-                                                agent_state.preview_screenshots.items()
-                                            )
-                                            if url in selected_url_set
-                                        }
-                                        st.session_state[
-                                            "market_cases_auto_selected"
-                                        ] = True
 
                             st.session_state[
                                 "market_agent_state"
@@ -750,7 +745,10 @@ if uploaded_file is not None:
                                     )
                                 )
 
-                            if agent_state.status == "failed":
+                            if agent_state.status in {
+                                "failed",
+                                "awaiting_human_input",
+                            }:
                                 st.warning(agent_state.stop_reason)
 
                         except Exception as error:
@@ -767,17 +765,32 @@ if uploaded_file is not None:
                         "market_candidates"
                     ]
 
+                    market_cases_auto_selected = st.session_state.get(
+                        "market_cases_auto_selected",
+                        False,
+                    )
+
                     visible_count = st.session_state.get(
                         "visible_market_candidate_count",
                         3,
                     )
 
-                    visible_candidates = candidates[:visible_count]
-
-                    st.success(
-                        f"找到 {len(candidates)} 个相近候选案例，"
-                        f"当前显示 Top {len(visible_candidates)}"
+                    visible_candidates = (
+                        []
+                        if market_cases_auto_selected
+                        else candidates[:visible_count]
                     )
+
+                    if market_cases_auto_selected:
+                        st.success(
+                            f"找到 {len(candidates)} 个合格案例，"
+                            "已自动采用相似度最高的 Top 3。"
+                        )
+                    else:
+                        st.warning(
+                            "达到最低相似度且证据完整的案例不足3个，"
+                            "请人工补充或选择。"
+                        )
 
                     agent_state = st.session_state.get(
                         "market_agent_state"
@@ -791,17 +804,9 @@ if uploaded_file is not None:
                         )
                     }
                     if agent_state is not None:
-                        if st.session_state.get(
-                            "market_cases_auto_selected",
-                            False,
-                        ):
-                            st.success(
-                                "Top 3 均通过高质量、价格分布、"
-                                "唯一性及证据完整性校验，已自动采用。"
-                            )
                         if (
                             agent_state.status
-                            == "awaiting_human_approval"
+                            == "candidates_ready"
                         ):
                             automatic_selection = st.session_state.get(
                                 "automatic_case_selection"
@@ -836,7 +841,94 @@ if uploaded_file is not None:
                                 hide_index=True,
                             )
 
-                    if len(candidates) < 3:
+                        if agent_state.status == "awaiting_human_input":
+                            with st.expander(
+                                "补充市场案例并恢复 Agent",
+                                expanded=True,
+                            ):
+                                st.caption(
+                                    "仅在自动搜索不足3例时使用。提交后，"
+                                    "LangGraph 会从当前 checkpoint 继续评分，"
+                                    "不会重新执行已经完成的城市搜索。"
+                                )
+                                manual_case_rows = st.data_editor(
+                                    [
+                                        {
+                                            "车源URL": "",
+                                            "车型": market_keyword,
+                                            "上牌年份": int(target_market_year),
+                                            "里程公里": int(target_market_mileage),
+                                            "城市": "人工补充",
+                                            "价格元": 0,
+                                        }
+                                    ],
+                                    num_rows="dynamic",
+                                    hide_index=True,
+                                    use_container_width=True,
+                                    key="manual_market_case_editor",
+                                )
+                                if st.button("提交补充案例并恢复搜索"):
+                                    try:
+                                        additional_listings = [
+                                            MarketListing(
+                                                source_url=row["车源URL"],
+                                                vehicle_model=row["车型"],
+                                                registration_year=int(
+                                                    row["上牌年份"]
+                                                ),
+                                                mileage_km=int(row["里程公里"]),
+                                                city=row["城市"],
+                                                price_cny=row["价格元"],
+                                            )
+                                            for row in manual_case_rows
+                                            if str(row.get("车源URL", "")).strip()
+                                        ]
+                                        if not additional_listings:
+                                            raise ValueError(
+                                                "请至少填写一条补充案例"
+                                            )
+                                        active_market_agent = (
+                                            st.session_state.get(
+                                                "market_agent_instance"
+                                            )
+                                        )
+                                        if active_market_agent is None:
+                                            raise ValueError(
+                                                "当前 Agent 会话已失效，"
+                                                "请重新运行市场搜索"
+                                            )
+                                        resume_market_agent = getattr(
+                                            active_market_agent,
+                                            "resume_with_human_cases",
+                                        )
+                                        resumed_state = (
+                                            resume_market_agent(
+                                                agent_state.graph_thread_id,
+                                                additional_listings,
+                                            )
+                                        )
+                                        st.session_state[
+                                            "market_agent_state"
+                                        ] = resumed_state
+                                        st.session_state[
+                                            "market_candidates"
+                                        ] = resumed_state.candidates
+                                        st.session_state[
+                                            "visible_market_candidate_count"
+                                        ] = 3
+                                        if (
+                                            resumed_state.status
+                                            == "candidates_ready"
+                                        ):
+                                            apply_automatic_market_selection(
+                                                active_market_agent,
+                                                resumed_state,
+                                            )
+                                        st.rerun()
+                                    except Exception as error:
+                                        st.error(f"补充案例处理失败：{error}")
+
+                    if len(candidates) < 3 and not market_cases_auto_selected:
                         st.warning(
                             f"目前只有 {len(candidates)} 个案例达到"
                             f" {minimum_quality_score} 分质量门槛，"
@@ -907,7 +999,10 @@ if uploaded_file is not None:
                                 f"[查看车源]({item.source_url})"
                             )
 
-                    if visible_count < len(candidates):
+                    if (
+                        not market_cases_auto_selected
+                        and visible_count < len(candidates)
+                    ):
                         if st.button("添加一个候选案例"):
                             st.session_state[
                                 "visible_market_candidate_count"
@@ -925,15 +1020,10 @@ if uploaded_file is not None:
                         )
                     ]
 
-                    manual_button_label = (
-                        "保存手动替换的案例"
-                        if st.session_state.get(
-                            "market_cases_auto_selected",
-                            False,
-                        )
-                        else "确认采用的市场案例"
-                    )
-                    if st.button(manual_button_label):
+                    if (
+                        not market_cases_auto_selected
+                        and st.button("确认采用的市场案例")
+                    ):
                         for state_key in (
                             "ai_comparison_suggestions",
                             "adjusted_market_prices",
@@ -986,18 +1076,22 @@ if uploaded_file is not None:
                                     "成功保存的完整案例不足3个，"
                                     "已返回市场案例搜索 Agent。"
                                 )
-                                ControlledMarketAgent().return_incomplete_cases(
+                                active_market_agent = st.session_state.get(
+                                    "market_agent_instance"
+                                ) or ControlledMarketAgent()
+                                active_market_agent.return_incomplete_cases(
                                     agent_state,
                                     list(snapshot_failures),
                                 )
                             else:
                                 if (
                                     agent_state.status
-                                    == "awaiting_human_approval"
+                                    == "candidates_ready"
                                 ):
-                                    ControlledMarketAgent().approve_candidates(
-                                        agent_state
-                                    )
+                                    active_market_agent = st.session_state.get(
+                                        "market_agent_instance"
+                                    ) or ControlledMarketAgent()
+                                    active_market_agent.approve_candidates(agent_state)
                                 st.session_state[
                                     "market_agent_state"
                                 ] = agent_state
@@ -1183,37 +1277,43 @@ if uploaded_file is not None:
 
                                 adjustment_rows.append(row)
 
-                            st.subheader("比较因素条件指数表")
-                            st.caption(
-                                "Qwen只建议方向、档位差和理由；正式指数由Python规则计算，"
-                                "证据不足强制为100。下表供人工复核。"
-                            )
-                            st.dataframe(
-                                evidence_rows,
-                                use_container_width=True,
-                                hide_index=True,
-                            )
-                            st.caption("确认依据后，可在下方修改最终采用指数")
+                            with st.expander(
+                                "比较因素条件指数表",
+                                expanded=False,
+                            ):
+                                st.caption(
+                                    "Qwen只建议方向、档位差和理由；"
+                                    "正式指数由Python规则计算，"
+                                    "证据不足强制为100。下表供人工复核。"
+                                )
+                                st.dataframe(
+                                    evidence_rows,
+                                    use_container_width=True,
+                                    hide_index=True,
+                                )
+                                st.caption(
+                                    "确认依据后，可在下方修改最终采用指数"
+                                )
 
-                            edited_adjustments = st.data_editor(
-                                adjustment_rows,
-                                use_container_width=True,
-                                hide_index=True,
-                                disabled=[
-                                    "因素",
-                                    "待估车辆",
-                                ],
-                                column_config={
-                                    column: st.column_config.NumberColumn(
-                                        column,
-                                        min_value=70,
-                                        max_value=130,
-                                        step=1,
-                                    )
-                                    for column in case_columns
-                                },
-                                key="ai_adjustment_editor",
-                            )
+                                edited_adjustments = st.data_editor(
+                                    adjustment_rows,
+                                    use_container_width=True,
+                                    hide_index=True,
+                                    disabled=[
+                                        "因素",
+                                        "待估车辆",
+                                    ],
+                                    column_config={
+                                        column: st.column_config.NumberColumn(
+                                            column,
+                                            min_value=70,
+                                            max_value=130,
+                                            step=1,
+                                        )
+                                        for column in case_columns
+                                    },
+                                    key="ai_adjustment_editor",
+                                )
 
                             st.session_state[
                                 "edited_ai_adjustments"
@@ -1296,16 +1396,20 @@ if uploaded_file is not None:
                                 registration_row,
                             ]
 
-                            st.subheader("公式计算指数")
-                            st.caption(
-                                "案例只提供上牌年份，因此年均里程为近似计算"
-                            )
+                            with st.expander(
+                                "公式计算指数",
+                                expanded=False,
+                            ):
+                                st.caption(
+                                    "案例只提供上牌年份，"
+                                    "因此年均里程为近似计算"
+                                )
 
-                            st.dataframe(
-                                formula_rows,
-                                use_container_width=True,
-                                hide_index=True,
-                            )
+                                st.dataframe(
+                                    formula_rows,
+                                    use_container_width=True,
+                                    hide_index=True,
+                                )
 
                             st.session_state[
                                 "formula_adjustments"
@@ -1398,13 +1502,15 @@ if uploaded_file is not None:
                                 )
                             )
 
-                            st.subheader("比较因素修正系数表")
-
-                            st.dataframe(
-                                correction_rows,
-                                use_container_width=True,
-                                hide_index=True,
-                            )
+                            with st.expander(
+                                "比较因素修正系数表",
+                                expanded=True,
+                            ):
+                                st.dataframe(
+                                    correction_rows,
+                                    use_container_width=True,
+                                    hide_index=True,
+                                )
 
                             st.metric(
                                 "车辆评估建议值",
@@ -1729,34 +1835,6 @@ if uploaded_file is not None:
                                         "不代表正式评估结论获批。"
                                     ),
                                 )
-
-                            with st.expander("查看 AI建议理由"):
-                                for index, suggestion in enumerate(
-                                    suggestions,
-                                    start=1,
-                                ):
-                                    st.markdown(f"**实例{index}**")
-
-                                    for factor_label, factor_name in (
-                                        factor_definitions
-                                    ):
-                                        factor = getattr(
-                                            suggestion,
-                                            factor_name,
-                                        )
-
-                                        evidence = (
-                                            "证据充足"
-                                            if factor.evidence_sufficient
-                                            else "证据不足"
-                                        )
-
-                                        st.write(
-                                            f"{factor_label}："
-                                            f"{factor.reason} "
-                                            f"（{evidence}，"
-                                            f"置信度 {factor.confidence:.0%}"
-                                        )
 
     else:
         st.info("请上传所选车辆对应的行驶证照片")

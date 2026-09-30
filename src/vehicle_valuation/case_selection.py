@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-from decimal import Decimal
-from statistics import median
-
 from pydantic import BaseModel, Field
 
 from vehicle_valuation.market_quality import MarketCaseQuality
@@ -23,10 +20,9 @@ def evaluate_automatic_case_selection(
     details: list[MarketListingDetail],
     screenshots: dict[str, tuple[bytes, bytes]],
     target_count: int = 3,
-    minimum_score: int = 85,
-    maximum_price_deviation: Decimal = Decimal("0.35"),
+    minimum_similarity_score: int = 60,
 ) -> AutomaticCaseSelection:
-    """只有质量、证据、唯一性和价格分布均安全时自动采用 Top N。"""
+    """完整案例达到最低相似度且数量足够时自动采用 Top N。"""
 
     quality_by_url = {
         str(item.source_url): item
@@ -39,54 +35,43 @@ def evaluate_automatic_case_selection(
         if (
             (quality := quality_by_url.get(str(item.source_url)))
             and quality.qualified
-            and quality.total_score >= minimum_score
+            and quality.similarity_score >= minimum_similarity_score
+            and str(item.source_url) in detail_urls
+            and (
+                (images := screenshots.get(str(item.source_url)))
+                is not None
+                and all(images)
+            )
         )
     ]
     eligible.sort(
-        key=lambda item: quality_by_url[
-            str(item.source_url)
-        ].total_score,
+        key=lambda item: (
+            quality_by_url[str(item.source_url)].similarity_score,
+            quality_by_url[str(item.source_url)].total_score,
+        ),
         reverse=True,
     )
+    unique_eligible: list[MarketListing] = []
+    seen_urls: set[str] = set()
+    for item in eligible:
+        url = str(item.source_url)
+        if url not in seen_urls:
+            unique_eligible.append(item)
+            seen_urls.add(url)
+
     reasons: list[str] = []
-    if len(eligible) < target_count:
+    if len(unique_eligible) < target_count:
         reasons.append(
-            f"达到{minimum_score}分的完整案例不足{target_count}个"
+            f"达到最低相似度{minimum_similarity_score}分的完整案例"
+            f"不足{target_count}个"
         )
         return AutomaticCaseSelection(approved=False, reasons=reasons)
 
-    selected = eligible[:target_count]
+    selected = unique_eligible[:target_count]
     urls = [str(item.source_url) for item in selected]
-    if len(urls) != len(set(urls)):
-        reasons.append("候选案例URL重复")
-
-    for listing in selected:
-        url = str(listing.source_url)
-        quality = quality_by_url[url]
-        if quality.risk_warnings:
-            reasons.append(
-                f"{url}存在风险：{'；'.join(quality.risk_warnings)}"
-            )
-        if url not in detail_urls:
-            reasons.append(f"{url}缺少详情字段")
-        images = screenshots.get(url)
-        if images is None or not all(images):
-            reasons.append(f"{url}缺少同次读取截图")
-
-    prices = [item.price_cny for item in selected]
-    middle = Decimal(str(median(float(price) for price in prices)))
-    if middle <= 0:
-        reasons.append("案例价格中位数无效")
-    else:
-        for listing in selected:
-            deviation = abs(listing.price_cny - middle) / middle
-            if deviation > maximum_price_deviation:
-                reasons.append(
-                    f"{listing.source_url}价格偏离中位数{deviation:.0%}"
-                )
 
     return AutomaticCaseSelection(
-        approved=not reasons,
-        selected_urls=(urls if not reasons else []),
-        reasons=reasons,
+        approved=True,
+        selected_urls=urls,
+        reasons=[],
     )

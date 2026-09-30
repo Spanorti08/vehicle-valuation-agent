@@ -81,8 +81,8 @@ class UnsafePlanner:
         )
 
 
-def test_agent_expands_scope_and_pauses_for_approval() -> None:
-    """首批案例不足时应自动扩展，达标后等待人工审批。"""
+def test_agent_expands_scope_and_finalizes_candidate_pool() -> None:
+    """首批案例不足时应自动扩展，达标后结束搜索。"""
 
     backend = FakeSearchBackend(
         {
@@ -103,7 +103,7 @@ def test_agent_expands_scope_and_pauses_for_approval() -> None:
 
     state = agent.run_until_pause(make_state())
 
-    assert state.status == "awaiting_human_approval"
+    assert state.status == "candidates_ready"
     assert len(state.candidates) == 3
     assert backend.calls == [("bj",), ("sh",)]
     assert [entry.tool for entry in state.trace] == [
@@ -111,7 +111,7 @@ def test_agent_expands_scope_and_pauses_for_approval() -> None:
         "evaluate_case_quality",
         "expand_search_city",
         "evaluate_case_quality",
-        "request_human_approval",
+        "finalize_candidate_pool",
     ]
 
 
@@ -146,7 +146,7 @@ def test_agent_retries_failed_city_within_budget() -> None:
 
     state = agent.run_until_pause(make_state())
 
-    assert state.status == "awaiting_human_approval"
+    assert state.status == "candidates_ready"
     assert backend.call_count == 2
     assert state.retry_counts == {"bj": 1}
     assert "retry_failed_search" in [
@@ -154,8 +154,8 @@ def test_agent_retries_failed_city_within_budget() -> None:
     ]
 
 
-def test_agent_fails_safely_when_cases_remain_insufficient() -> None:
-    """搜索资源耗尽且案例不足时应明确失败而非无限循环。"""
+def test_agent_pauses_when_cases_remain_insufficient() -> None:
+    """搜索资源耗尽且案例不足时应暂停而非无限循环。"""
 
     agent = ControlledMarketAgent(
         planner=RuleBasedMarketAgentPlanner(),
@@ -167,10 +167,69 @@ def test_agent_fails_safely_when_cases_remain_insufficient() -> None:
 
     state = agent.run_until_pause(make_state())
 
-    assert state.status == "failed"
+    assert state.status == "awaiting_human_input"
     assert len(state.candidates) == 1
     assert "仅找到 1 个" in state.stop_reason
     assert state.trace[-1].tool == "stop_safely"
+
+
+def test_langgraph_checkpoint_can_resume_after_human_input(tmp_path) -> None:
+    """SQLite checkpoint 应支持跨 Agent 实例恢复暂停的搜索。"""
+
+    checkpoint_path = tmp_path / "market_graph.sqlite"
+    config = MarketAgentConfig(city_batches=[["bj"]])
+    first_agent = ControlledMarketAgent(
+        planner=RuleBasedMarketAgentPlanner(),
+        search_backend=FakeSearchBackend(
+            {("bj",): ([make_listing("one")], [])}
+        ),
+        config=config,
+        checkpoint_path=checkpoint_path,
+    )
+
+    paused = first_agent.run_until_pause(make_state())
+    thread_id = paused.graph_thread_id
+
+    assert paused.status == "awaiting_human_input"
+    assert first_agent.get_checkpoint_state(thread_id).status == (
+        "awaiting_human_input"
+    )
+    assert "human_input" in first_agent.graph_mermaid
+    first_agent.close()
+
+    resumed_agent = ControlledMarketAgent(
+        planner=RuleBasedMarketAgentPlanner(),
+        search_backend=FakeSearchBackend({}),
+        config=config,
+        checkpoint_path=checkpoint_path,
+    )
+    resumed = resumed_agent.resume_with_human_cases(
+        thread_id,
+        [make_listing("two"), make_listing("three")],
+    )
+
+    assert resumed.status == "candidates_ready"
+    assert len(resumed.candidates) == 3
+    assert resumed.trace[-1].tool == "finalize_candidate_pool"
+    resumed_agent.close()
+
+
+def test_langgraph_checkpoint_state_keeps_binary_evidence() -> None:
+    """图状态序列化不能丢失后续报告所需的网页截图。"""
+
+    agent = ControlledMarketAgent(
+        planner=RuleBasedMarketAgentPlanner(),
+        search_backend=FakeSearchBackend({}),
+    )
+    state = make_state()
+    state.preview_screenshots = {
+        "https://example.com/case": (b"top-image", b"detail-image")
+    }
+
+    payload = agent._serialize_agent_state(state)
+    restored = MarketAgentState.model_validate(payload)
+
+    assert restored.preview_screenshots == state.preview_screenshots
 
 
 def test_policy_replaces_disallowed_planner_action() -> None:
@@ -195,13 +254,13 @@ def test_policy_replaces_disallowed_planner_action() -> None:
 
     state = agent.run_until_pause(make_state())
 
-    assert state.status == "awaiting_human_approval"
+    assert state.status == "candidates_ready"
     assert state.trace[1].tool == "evaluate_case_quality"
     assert "策略层拒绝 stop_safely" in state.trace[1].policy_note
 
 
-def test_human_approval_is_required_before_completion() -> None:
-    """Agent 找到案例后不能自动完成，必须由用户审批。"""
+def test_selection_policy_completes_ready_candidate_pool() -> None:
+    """Agent 找到案例后由外部确定性 Top 3 策略完成选择。"""
 
     backend = FakeSearchBackend(
         {
@@ -222,7 +281,7 @@ def test_human_approval_is_required_before_completion() -> None:
     )
 
     state = agent.run_until_pause(make_state())
-    assert state.status == "awaiting_human_approval"
+    assert state.status == "candidates_ready"
 
     approved = agent.approve_candidates(state)
     assert approved.status == "completed"
@@ -264,7 +323,7 @@ def test_agent_exposes_exact_flowchart_tool_whitelist() -> None:
         "refine_search_keyword",
         "retry_failed_search",
         "switch_data_source",
-        "request_human_approval",
+        "finalize_candidate_pool",
         "stop_safely",
     )
 
@@ -329,4 +388,4 @@ def test_agent_deduplicates_listings_across_tools() -> None:
 
     assert len(state.all_listings) == 1
     assert len(state.candidates) == 1
-    assert state.status == "failed"
+    assert state.status == "awaiting_human_input"

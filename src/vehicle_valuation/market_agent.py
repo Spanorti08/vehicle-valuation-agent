@@ -1,18 +1,24 @@
-"""唯一的车辆市场案例搜索 Agent。
+"""基于 LangGraph 的车辆市场案例搜索 Agent。
 
 Planner 只能从白名单工具中选择下一步；搜索、质量评分、扩城、放宽条件、
-重试与安全停止均由确定性执行器完成，最终案例必须由人工确认。
+重试与安全停止均由确定性执行器完成。LangGraph 负责状态路由、checkpoint、
+暂停与恢复，合格案例足够时交给确定性 Top 3 策略自动采用。
 """
 
 from __future__ import annotations
 
 import re
+import sqlite3
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from time import perf_counter
-from typing import Literal, Protocol
+from typing import Literal, Protocol, TypedDict
 
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.graph import END, START, StateGraph
+from langgraph.types import Command, interrupt
 from pydantic import BaseModel, Field
 
 from vehicle_valuation.agent_logging import create_run_id, save_agent_trace
@@ -39,13 +45,14 @@ AgentToolName = Literal[
     "refine_search_keyword",
     "retry_failed_search",
     "switch_data_source",
-    "request_human_approval",
+    "finalize_candidate_pool",
     "stop_safely",
 ]
 
 AgentStatus = Literal[
     "running",
-    "awaiting_human_approval",
+    "candidates_ready",
+    "awaiting_human_input",
     "completed",
     "failed",
 ]
@@ -135,6 +142,15 @@ class MarketAgentState(BaseModel):
     next_batch_index: int = Field(default=0, ge=0)
     trace: list[MarketAgentTraceEntry] = Field(default_factory=list)
     stop_reason: str = ""
+    graph_thread_id: str = ""
+
+
+class MarketGraphState(TypedDict, total=False):
+    """LangGraph 节点之间传递的最小共享状态。"""
+
+    agent_state: dict
+    decision: dict
+    policy_note: str
 
 
 class MarketEvaluationBatch(BaseModel):
@@ -254,7 +270,7 @@ class RuleBasedMarketAgentPlanner:
         "adjust_mileage_range",
         "refine_search_keyword",
         "switch_data_source",
-        "request_human_approval",
+        "finalize_candidate_pool",
         "stop_safely",
     )
 
@@ -288,7 +304,8 @@ class OllamaMarketAgentPlanner:
     ) -> MarketAgentDecision:
         prompt = f"""
 你是本流程唯一的车辆市场案例搜索 Agent。你不能直接访问网络、不能估值，
-只能从 allowed_tools 选择一个工具。达到 3 个合格案例后必须交给人工确认。
+只能从 allowed_tools 选择一个工具。达到 3 个合格案例后必须结束搜索，
+交给确定性 Top 3 策略自动采用。
 关键词：{state.market_keyword}；年份：{state.target_year}±{state.year_tolerance}；
 里程：{state.target_mileage_km}±{state.mileage_tolerance_km}；
 轮次：{state.search_round}；已搜索城市：{state.searched_cities}；
@@ -307,7 +324,7 @@ class OllamaMarketAgentPlanner:
 
 
 class ControlledMarketAgent:
-    """执行白名单工具、硬规则、运行预算和人工暂停。"""
+    """用 LangGraph 编排白名单工具、运行预算、暂停与恢复。"""
 
     def __init__(
         self,
@@ -317,6 +334,7 @@ class ControlledMarketAgent:
         case_evaluator: MarketCaseEvaluator | None = None,
         config: MarketAgentConfig | None = None,
         log_dir: Path | None = None,
+        checkpoint_path: Path | None = None,
     ) -> None:
         self.planner = planner or OllamaMarketAgentPlanner()
         self.config = config or MarketAgentConfig()
@@ -326,6 +344,7 @@ class ControlledMarketAgent:
         self.log_dir = log_dir
         self.run_id = create_run_id()
         self.last_log_path: Path | None = None
+        self._checkpoint_connection: sqlite3.Connection | None = None
         self._tools: dict[AgentToolName, Callable[[MarketAgentState], str]] = {
             "search_market_cases": self._search_market_cases,
             "evaluate_case_quality": self._evaluate_case_quality,
@@ -335,13 +354,197 @@ class ControlledMarketAgent:
             "refine_search_keyword": self._refine_search_keyword,
             "retry_failed_search": self._retry_failed_search,
             "switch_data_source": self._switch_data_source,
-            "request_human_approval": self._request_human_approval,
+            "finalize_candidate_pool": self._finalize_candidate_pool,
             "stop_safely": self._stop_safely,
         }
+        if checkpoint_path is None:
+            self.checkpointer = InMemorySaver()
+        else:
+            checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+            self._checkpoint_connection = sqlite3.connect(
+                checkpoint_path,
+                check_same_thread=False,
+            )
+            sqlite_saver = SqliteSaver(self._checkpoint_connection)
+            sqlite_saver.setup()
+            self.checkpointer = sqlite_saver
+        self.graph = self._build_graph()
 
     @property
     def tool_names(self) -> tuple[AgentToolName, ...]:
         return tuple(self._tools)
+
+    @property
+    def graph_mermaid(self) -> str:
+        """返回可直接展示在文档或面试中的真实执行图。"""
+
+        return self.graph.get_graph().draw_mermaid()
+
+    def close(self) -> None:
+        if self._checkpoint_connection is not None:
+            self._checkpoint_connection.close()
+            self._checkpoint_connection = None
+
+    def _build_graph(self):
+        builder = StateGraph(MarketGraphState)
+        builder.add_node("plan_next_action", self._graph_plan_next_action)
+        for tool_name in self._tools:
+            builder.add_node(
+                tool_name,
+                self._make_graph_tool_node(tool_name),
+            )
+        builder.add_node("human_input", self._graph_human_input)
+        builder.add_edge(START, "plan_next_action")
+        builder.add_conditional_edges(
+            "plan_next_action",
+            self._route_planned_action,
+            {**{name: name for name in self._tools}, "end": END},
+        )
+        for tool_name in self._tools:
+            builder.add_conditional_edges(
+                tool_name,
+                self._route_after_tool,
+                {
+                    "continue": "plan_next_action",
+                    "human_input": "human_input",
+                    "end": END,
+                },
+            )
+        builder.add_edge("human_input", "plan_next_action")
+        return builder.compile(
+            checkpointer=self.checkpointer,
+            name="vehicle_market_search_agent",
+        )
+
+    def _graph_config(self, thread_id: str) -> dict:
+        return {
+            "configurable": {"thread_id": thread_id},
+            "recursion_limit": self.config.max_steps * 3 + 10,
+        }
+
+    @staticmethod
+    def _coerce_agent_state(value) -> MarketAgentState:
+        if isinstance(value, MarketAgentState):
+            return value
+        return MarketAgentState.model_validate(value)
+
+    @staticmethod
+    def _serialize_agent_state(state: MarketAgentState) -> dict:
+        """生成 checkpoint 可序列化状态，同时保留二进制截图。"""
+
+        payload = state.model_dump(mode="json")
+        payload["preview_screenshots"] = state.preview_screenshots
+        return payload
+
+    @staticmethod
+    def _coerce_decision(value) -> MarketAgentDecision:
+        if isinstance(value, MarketAgentDecision):
+            return value
+        return MarketAgentDecision.model_validate(value)
+
+    def _graph_plan_next_action(
+        self,
+        graph_state: MarketGraphState,
+    ) -> MarketGraphState:
+        state = self._coerce_agent_state(
+            graph_state["agent_state"]
+        ).model_copy(deep=True)
+        if state.step_count >= self.config.max_steps:
+            state.status = "failed"
+            state.stop_reason = "达到最大步骤数，已安全停止"
+            return {"agent_state": self._serialize_agent_state(state)}
+
+        allowed = self._allowed_tools(state)
+        decision = self.planner.plan(state, allowed)
+        policy_note = ""
+        if decision.tool not in allowed:
+            safe = RuleBasedMarketAgentPlanner().plan(state, allowed)
+            policy_note = (
+                f"策略层拒绝 {decision.tool}，改为 {safe.tool}"
+            )
+            decision = safe
+        return {
+            "agent_state": self._serialize_agent_state(state),
+            "decision": decision.model_dump(mode="json"),
+            "policy_note": policy_note,
+        }
+
+    def _route_planned_action(
+        self,
+        graph_state: MarketGraphState,
+    ) -> AgentToolName | Literal["end"]:
+        state = self._coerce_agent_state(graph_state["agent_state"])
+        if state.status != "running" or "decision" not in graph_state:
+            return "end"
+        return self._coerce_decision(graph_state["decision"]).tool
+
+    def _make_graph_tool_node(
+        self,
+        tool_name: AgentToolName,
+    ) -> Callable[[MarketGraphState], MarketGraphState]:
+        def execute_tool(
+            graph_state: MarketGraphState,
+        ) -> MarketGraphState:
+            state = self._coerce_agent_state(
+                graph_state["agent_state"]
+            ).model_copy(deep=True)
+            decision = self._coerce_decision(graph_state["decision"])
+            if decision.tool != tool_name:
+                raise RuntimeError(
+                    f"LangGraph 路由错误：{decision.tool} -> {tool_name}"
+                )
+            self._execute(
+                state,
+                decision,
+                graph_state.get("policy_note", ""),
+            )
+            return {"agent_state": self._serialize_agent_state(state)}
+
+        return execute_tool
+
+    def _route_after_tool(
+        self,
+        graph_state: MarketGraphState,
+    ) -> Literal["continue", "human_input", "end"]:
+        status = self._coerce_agent_state(
+            graph_state["agent_state"]
+        ).status
+        if status == "running":
+            return "continue"
+        if status == "awaiting_human_input":
+            return "human_input"
+        return "end"
+
+    def _graph_human_input(
+        self,
+        graph_state: MarketGraphState,
+    ) -> MarketGraphState:
+        state = self._coerce_agent_state(
+            graph_state["agent_state"]
+        ).model_copy(deep=True)
+        response = interrupt(
+            {
+                "reason": state.stop_reason,
+                "qualified_case_count": len(state.candidates),
+                "required_case_count": self.config.target_count,
+                "minimum_similarity_score": (
+                    self.config.minimum_similarity_score
+                ),
+            }
+        )
+        additional_listings = [
+            MarketListing.model_validate(item)
+            for item in response.get("additional_listings", [])
+        ]
+        by_url = {
+            str(item.source_url): item
+            for item in [*state.all_listings, *additional_listings]
+        }
+        state.all_listings = list(by_url.values())
+        state.status = "running"
+        state.stop_reason = ""
+        state.needs_quality_evaluation = True
+        return {"agent_state": self._serialize_agent_state(state)}
 
     def initialize_state(
         self,
@@ -370,21 +573,45 @@ class ControlledMarketAgent:
             state.used_keywords = [state.market_keyword]
         if not state.allowed_sources:
             state.allowed_sources = list(self.config.allowed_sources)
-        while state.status == "running":
-            if state.step_count >= self.config.max_steps:
-                state.status = "failed"
-                state.stop_reason = "达到最大步骤数，已安全停止"
-                break
-            allowed = self._allowed_tools(state)
-            decision = self.planner.plan(state, allowed)
-            policy_note = ""
-            if decision.tool not in allowed:
-                safe = RuleBasedMarketAgentPlanner().plan(state, allowed)
-                policy_note = f"策略层拒绝 {decision.tool}，改为 {safe.tool}"
-                decision = safe
-            self._execute(state, decision, policy_note)
-        self._persist_log(state)
-        return state
+        thread_id = state.graph_thread_id or self.run_id
+        state.graph_thread_id = thread_id
+        result = self.graph.invoke(
+            {"agent_state": self._serialize_agent_state(state)},
+            config=self._graph_config(thread_id),
+        )
+        final_state = self._coerce_agent_state(result["agent_state"])
+        self._persist_log(final_state)
+        return final_state
+
+    def resume_with_human_cases(
+        self,
+        thread_id: str,
+        additional_listings: list[MarketListing],
+    ) -> MarketAgentState:
+        """从 LangGraph interrupt checkpoint 注入案例并继续执行。"""
+
+        result = self.graph.invoke(
+            Command(
+                resume={
+                    "additional_listings": [
+                        item.model_dump(mode="json")
+                        for item in additional_listings
+                    ]
+                }
+            ),
+            config=self._graph_config(thread_id),
+        )
+        final_state = self._coerce_agent_state(result["agent_state"])
+        self._persist_log(final_state)
+        return final_state
+
+    def get_checkpoint_state(self, thread_id: str) -> MarketAgentState:
+        """读取指定运行线程最近一次持久化的 Agent 状态。"""
+
+        snapshot = self.graph.get_state(self._graph_config(thread_id))
+        if "agent_state" not in snapshot.values:
+            raise ValueError(f"未找到 LangGraph checkpoint：{thread_id}")
+        return self._coerce_agent_state(snapshot.values["agent_state"])
 
     def approve_candidates(self, state: MarketAgentState) -> MarketAgentState:
         return self.complete_candidate_selection(state, "human")
@@ -396,8 +623,8 @@ class ControlledMarketAgent:
     ) -> MarketAgentState:
         """由人工或确定性高质量策略完成案例采用。"""
 
-        if state.status != "awaiting_human_approval":
-            raise ValueError("Agent 当前不在等待人工审批状态")
+        if state.status != "candidates_ready":
+            raise ValueError("Agent 当前没有可完成选择的候选案例")
         if len(state.candidates) < self.config.target_count:
             raise ValueError("合格案例不足，不能完成人工确认")
         state.status = "completed"
@@ -444,7 +671,7 @@ class ControlledMarketAgent:
         if state.needs_quality_evaluation:
             return ["evaluate_case_quality"]
         if len(state.candidates) >= self.config.target_count:
-            return ["request_human_approval"]
+            return ["finalize_candidate_pool"]
         if state.search_round >= self.config.max_search_rounds:
             return ["stop_safely"]
         if state.next_batch_index == 0:
@@ -642,19 +869,19 @@ class ControlledMarketAgent:
         state.next_batch_index = 0
         return f"数据源切换为 {self._current_source(state)}"
 
-    def _request_human_approval(self, state: MarketAgentState) -> str:
+    def _finalize_candidate_pool(self, state: MarketAgentState) -> str:
         if len(state.candidates) < self.config.target_count:
-            raise ValueError("案例不足，不能请求人工确认")
-        state.status = "awaiting_human_approval"
-        state.stop_reason = "案例质量与数量达标，等待用户选择并确认"
+            raise ValueError("案例不足，不能结束候选案例搜索")
+        state.status = "candidates_ready"
+        state.stop_reason = "案例数量与门槛达标，交给确定性 Top 3 策略"
         return state.stop_reason
 
     def _stop_safely(self, state: MarketAgentState) -> str:
-        state.status = "failed"
+        state.status = "awaiting_human_input"
         state.stop_reason = (
             f"达到受控搜索边界：共 {state.search_round} 轮、"
             f"{len(state.searched_cities)} 个城市、"
             f"仅找到 {len(state.candidates)} 个合格案例；"
-            "请人工补充来源或调整条件"
+            "LangGraph 已暂停，请人工补充来源或调整条件后恢复"
         )
         return state.stop_reason

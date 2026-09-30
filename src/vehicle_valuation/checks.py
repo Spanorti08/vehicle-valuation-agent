@@ -1,4 +1,9 @@
+import re
+import unicodedata
+
 from pydantic import BaseModel, Field
+
+from .model_mapping_retrieval import extract_legal_model
 
 from .model import DrivingLicenseData, SubjectVehicle, ValuationRequest
 
@@ -44,9 +49,8 @@ def check_plate_number(
 def normalize_vehicle_model(value: str) -> str:
     """删除车辆型号中的通用描述和无意义标点。"""
 
-    normalized_value = "".join(
-        value.split()
-    ).upper()
+    normalized_value = unicodedata.normalize("NFKC", value).upper()
+    normalized_value = re.sub(r"\s+", "", normalized_value)
 
     for generic_word in (
         "小轿车",
@@ -59,26 +63,41 @@ def normalize_vehicle_model(value: str) -> str:
             "",
         )
 
-    for symbol in ("-", "·", ".", "/"):
-        normalized_value = normalized_value.replace(
-            symbol,
-            "",
-        )
+    normalized_value = re.sub(
+        r"[^0-9A-Z\u4e00-\u9fff]",
+        "",
+        normalized_value,
+    )
 
     return normalized_value
+
+
+def vehicle_models_equivalent(left: str, right: str) -> bool:
+    """车型文本不同，但法定型号一致时视为同一车辆型号。"""
+
+    left_normalized = normalize_vehicle_model(left)
+    right_normalized = normalize_vehicle_model(right)
+    if not left_normalized or not right_normalized:
+        return False
+    if (
+        left_normalized in right_normalized
+        or right_normalized in left_normalized
+    ):
+        return True
+
+    try:
+        return extract_legal_model(left) == extract_legal_model(right)
+    except ValueError:
+        return False
 
 
 def check_vehicle_model(
     request: ValuationRequest,
 ) -> str | None:
-    excel_model = normalize_vehicle_model(
-        request.subject_vehicle.vehicle_name
-    )
-    license_model = normalize_vehicle_model(
-        request.driving_license.vehicle_model
-    )
-
-    if license_model in excel_model:
+    if vehicle_models_equivalent(
+        request.subject_vehicle.vehicle_name,
+        request.driving_license.vehicle_model,
+    ):
         return None
 
     return (
@@ -179,9 +198,10 @@ def run_license_subject_checks(
             message="Excel 与行驶证的车牌号不一致",
         ))
 
-    excel_model = normalize_vehicle_model(subject_vehicle.vehicle_name)
-    license_model = normalize_vehicle_model(driving_license.vehicle_model)
-    if license_model not in excel_model:
+    if not vehicle_models_equivalent(
+        subject_vehicle.vehicle_name,
+        driving_license.vehicle_model,
+    ):
         conflicts.append(MaterialConflict(
             field_name="车辆型号",
             source_values={

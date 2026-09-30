@@ -46,7 +46,7 @@ def test_three_clean_high_quality_cases_are_auto_selected() -> None:
     assert len(result.selected_urls) == 3
 
 
-def test_risky_case_requires_human_selection() -> None:
+def test_non_blocking_warning_does_not_require_human_selection() -> None:
     listings = [_listing(index) for index in range(1, 4)]
     qualities = [_quality(item) for item in listings]
     qualities[0].risk_warnings.append("疑似重复发布")
@@ -61,11 +61,10 @@ def test_risky_case_requires_human_selection() -> None:
         },
     )
 
-    assert result.approved is False
-    assert any("疑似重复发布" in reason for reason in result.reasons)
+    assert result.approved is True
 
 
-def test_price_outlier_requires_human_selection() -> None:
+def test_price_outlier_does_not_require_human_selection() -> None:
     listings = [_listing(1), _listing(2), _listing(3, "160000")]
 
     result = evaluate_automatic_case_selection(
@@ -78,5 +77,23 @@ def test_price_outlier_requires_human_selection() -> None:
         },
     )
 
+    assert result.approved is True
+
+
+def test_insufficient_cases_above_similarity_floor_requires_human_selection() -> None:
+    listings = [_listing(index) for index in range(1, 4)]
+    qualities = [_quality(item) for item in listings]
+    qualities[0].similarity_score = 59
+
+    result = evaluate_automatic_case_selection(
+        listings,
+        qualities,
+        [MarketListingDetail(source_url=item.source_url) for item in listings],
+        {
+            str(item.source_url): (b"top", b"detail")
+            for item in listings
+        },
+    )
+
     assert result.approved is False
-    assert any("价格偏离" in reason for reason in result.reasons)
+    assert any("最低相似度60分" in reason for reason in result.reasons)

@@ -29,6 +29,14 @@ REQUIRED_LICENSE_FIELDS = (
 )
 HIGH_RISK_FIELDS = {"plate_number", "vin", "registration_date"}
 BRAND_SUFFIX_CONFUSIONS = {"界", "脾", "碑", "啤", "卑"}
+OCR_IDENTIFIER_CONFUSION_GROUPS = (
+    frozenset("0OQ"),
+    frozenset("1IL"),
+    frozenset("2Z"),
+    frozenset("5S"),
+    frozenset("6G"),
+    frozenset("8B"),
+)
 
 
 class LicenseFieldCorrection(BaseModel):
@@ -51,6 +59,47 @@ class LicenseCalibrationResult(BaseModel):
 
 def _compact(value: str) -> str:
     return re.sub(r"\s+", "", value).upper()
+
+
+def _normalize_identifier(value: str) -> str:
+    return re.sub(r"[^0-9A-Z\u4e00-\u9fff]", "", value.upper())
+
+
+def _is_reference_backed_ocr_match(
+    observed: str,
+    trusted: str,
+    max_differences: int,
+) -> bool:
+    """只接受可由常见 OCR 混淆逐字符还原的等长标识符。"""
+
+    observed_value = _normalize_identifier(observed)
+    trusted_value = _normalize_identifier(trusted)
+    if len(observed_value) != len(trusted_value):
+        return False
+
+    differences = 0
+    for observed_char, trusted_char in zip(
+        observed_value,
+        trusted_value,
+        strict=True,
+    ):
+        if observed_char == trusted_char:
+            continue
+        if not any(
+            observed_char in group and trusted_char in group
+            for group in OCR_IDENTIFIER_CONFUSION_GROUPS
+        ):
+            return False
+        differences += 1
+
+    return 0 < differences <= max_differences
+
+
+def _within_one_substitution(left: str, right: str) -> bool:
+    return (
+        len(left) == len(right)
+        and sum(a != b for a, b in zip(left, right, strict=True)) <= 1
+    )
 
 
 def estimate_field_confidences(
@@ -101,11 +150,22 @@ def _brand_supported(
         for token in re.split(r"[-·（）()\s]", mapping.brand)
         if len(token) >= 2
     ]
-    return any(
-        token in normalized_prefix
-        and any(token in reference for reference in references)
-        for token in brand_tokens
-    )
+    for token in brand_tokens:
+        if not any(token in reference for reference in references):
+            continue
+        if token in normalized_prefix:
+            return True
+        if any(
+            _within_one_substitution(
+                normalized_prefix[index:index + len(token)],
+                token,
+            )
+            for index in range(
+                max(0, len(normalized_prefix) - len(token) + 1)
+            )
+        ):
+            return True
+    return False
 
 
 def _calibrate_vehicle_model(
@@ -114,41 +174,66 @@ def _calibrate_vehicle_model(
     mappings: list[VehicleModelMapping],
     base_confidence: float,
 ) -> LicenseFieldCorrection | None:
-    """只修复有法定型号和品牌词库共同支持的“牌”字误识别。"""
+    """用法定型号和品牌证据统一低风险车型 OCR 差异。"""
 
     try:
         legal_model = extract_legal_model(raw_value)
     except ValueError:
         return None
-    mapping = next(
-        (
-            item
-            for item in mappings
-            if normalize_legal_model(item.legal_model) == legal_model
-        ),
-        None,
-    )
-    if mapping is None:
+    matched_mappings = [
+        item
+        for item in mappings
+        if (
+            normalize_legal_model(item.legal_model) == legal_model
+            or _is_reference_backed_ocr_match(
+                legal_model,
+                normalize_legal_model(item.legal_model),
+                max_differences=2,
+            )
+        )
+    ]
+    matched_legal_models = {
+        normalize_legal_model(item.legal_model)
+        for item in matched_mappings
+    }
+    if len(matched_legal_models) != 1:
         return None
+    mapping = matched_mappings[0]
 
-    match = re.search(re.escape(legal_model), raw_value.upper())
-    if match is None or match.start() == 0:
+    match = re.search(
+        r"[A-Z]{1,4}\d[A-Z0-9.-]*",
+        raw_value.upper(),
+    )
+    if (
+        match is None
+        or match.start() == 0
+    ):
         return None
     prefix = raw_value[: match.start()]
-    if not prefix or prefix[-1] not in BRAND_SUFFIX_CONFUSIONS:
-        return None
-    if not _brand_supported(prefix[:-1], subject_vehicle, mapping):
+    brand_prefix = (
+        prefix[:-1]
+        if prefix and prefix[-1] in BRAND_SUFFIX_CONFUSIONS | {"牌"}
+        else prefix
+    )
+    if brand_prefix and not _brand_supported(
+        brand_prefix,
+        subject_vehicle,
+        mapping,
+    ):
         return None
 
-    calibrated = prefix[:-1] + "牌" + raw_value[match.start():]
+    calibrated = f"{mapping.brand}牌{mapping.legal_model}"
+    if calibrated == raw_value:
+        return None
     return LicenseFieldCorrection(
         field_name="vehicle_model",
         raw_value=raw_value,
         calibrated_value=calibrated,
-        rule="brand_suffix_confusion_before_legal_model",
+        rule="reference_backed_vehicle_model_normalization",
         evidence=(
             f"法定型号{mapping.legal_model}命中本地车型映射，"
-            f"品牌证据为{mapping.brand}，仅修正型号前一位易混淆字符"
+            f"品牌证据为{mapping.brand}；统一品牌轻微 OCR 错字、"
+            "通用后缀及型号标点或字母数字混淆"
         ),
         confidence=max(base_confidence, 0.98),
     )
@@ -159,7 +244,7 @@ def calibrate_license_fields(
     ocr_lines: list[OCRTextLine],
     subject_vehicle: SubjectVehicle,
     mappings: list[VehicleModelMapping],
-    high_risk_confidence_threshold: float = 0.85,
+    high_risk_confidence_threshold: float = 0.70,
 ) -> LicenseCalibrationResult:
     """校准安全字段；缺失或高风险低置信度字段升级人工复核。"""
 
@@ -192,6 +277,35 @@ def calibrate_license_fields(
             )
             fields[field_name] = calibrated
 
+    trusted_identifiers = {
+        "plate_number": subject_vehicle.plate_number,
+        "vin": subject_vehicle.vin,
+    }
+    for field_name, trusted_value in trusted_identifiers.items():
+        observed_value = fields.get(field_name)
+        if not observed_value or not trusted_value:
+            continue
+        if _is_reference_backed_ocr_match(
+            observed_value,
+            trusted_value,
+            max_differences=1 if field_name == "plate_number" else 2,
+        ):
+            calibrated = _normalize_identifier(trusted_value)
+            corrections.append(
+                LicenseFieldCorrection(
+                    field_name=field_name,
+                    raw_value=observed_value,
+                    calibrated_value=calibrated,
+                    rule="reference_backed_identifier_ocr_correction",
+                    evidence=(
+                        f"OCR 值仅包含常见字母数字混淆，"
+                        f"可唯一还原为 Excel 中的{field_name}"
+                    ),
+                    confidence=max(confidences.get(field_name, 0.0), 0.98),
+                )
+            )
+            fields[field_name] = calibrated
+
     raw_model = fields.get("vehicle_model")
     if raw_model:
         correction = _calibrate_vehicle_model(
@@ -209,11 +323,27 @@ def calibrate_license_fields(
         for field_name in REQUIRED_LICENSE_FIELDS
         if not fields.get(field_name)
     ]
+    trusted_matches = {
+        "plate_number": (
+            _compact(fields.get("plate_number") or "").replace("·", "")
+            == _compact(subject_vehicle.plate_number).replace("·", "")
+        ),
+        "registration_date": (
+            bool(fields.get("registration_date"))
+            and str(fields["registration_date"])[:7]
+            == subject_vehicle.in_service_date
+        ),
+        "vin": (
+            bool(subject_vehicle.vin)
+            and _compact(fields.get("vin") or "")
+            == _compact(subject_vehicle.vin or "")
+        ),
+    }
     for field_name in HIGH_RISK_FIELDS:
         if fields.get(field_name) and (
             confidences.get(field_name, 0.0)
             < high_risk_confidence_threshold
-        ):
+        ) and not trusted_matches[field_name]:
             review_reasons.append(
                 f"{field_name} OCR置信度"
                 f"{confidences.get(field_name, 0.0):.0%}低于"

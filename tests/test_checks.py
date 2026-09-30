@@ -9,6 +9,7 @@ from vehicle_valuation.checks import (
     run_initial_checks,
     run_license_subject_checks,
     run_structured_checks,
+    vehicle_models_equivalent,
 )
 from vehicle_valuation.loaders import (
     load_synthetic_valuation_request,
@@ -68,6 +69,13 @@ def test_different_vehicle_models_create_issue() -> None:
 
     assert result is not None
     assert "车辆型号可能不一致" in result
+
+
+def test_same_legal_model_ignores_low_value_brand_text_differences() -> None:
+    assert vehicle_models_equivalent(
+        "梅赛德斯-奔驰牌BJ7204小轿车",
+        "梅赛德斯 奔驰界 BJ7.204",
+    )
 
 
 def test_matching_registration_months_have_no_issue() -> None:
